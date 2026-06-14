@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "start": "tsx server/index.ts",
+    "start": "PUPPETEER_CACHE_DIR=.cache/puppeteer tsx server/index.ts",
     "build": "tsc -b && vite build",
-    "build:render": "pnpm exec puppeteer browsers install chrome && pnpm build",
+    "build:render": "PUPPETEER_CACHE_DIR=.cache/puppeteer pnpm exec puppeteer browsers install chrome && pnpm build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

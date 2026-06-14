@@ -16,6 +16,7 @@ const port = parsePort(process.env.PORT);
 const apiKey = process.env.COVERFIRE_API_KEY;
 const configuredRenderOrigin = process.env.COVERFIRE_RENDER_ORIGIN;
 const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+const puppeteerCacheDirectory = process.env.PUPPETEER_CACHE_DIR || path.resolve(process.cwd(), '.cache', 'puppeteer');
 
 const app = express();
 const distPath = path.resolve(process.cwd(), 'dist');
@@ -102,6 +103,8 @@ app.listen(port, host, function listenHandler() {
 
   console.log(`Coverfire server listening on http://${host}:${port}`);
   console.log(`PDF render origin: ${renderOrigin}`);
+  console.log(`Puppeteer cache directory: ${puppeteerCacheDirectory}`);
+  console.log(`Puppeteer cache exists: ${fs.existsSync(puppeteerCacheDirectory)}`);
 });
 
 async function renderCoverLetterPdf(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {

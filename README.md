@@ -35,6 +35,7 @@ Copy `.env.example` and provide values as needed:
 - `PORT`: optional server port, defaults to `3000`
 - `COVERFIRE_RENDER_ORIGIN`: optional render origin for local development when the Vite app is already running
 - `PUPPETEER_EXECUTABLE_PATH`: optional explicit Chrome/Chromium path
+- `PUPPETEER_CACHE_DIR`: optional explicit Puppeteer cache directory
 
 ## Local development
 
@@ -88,3 +89,4 @@ For Render specifically:
 - Build Command: `pnpm install && pnpm run build:render`
 - Start Command: `pnpm start`
 - Health Check Path: `/api/healthz`
+- Optional Environment Variable: `PUPPETEER_CACHE_DIR=.cache/puppeteer`
