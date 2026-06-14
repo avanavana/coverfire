@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+:root {
+  --text: #666669;
+  --text-h: #000;
+  --background: #eee;
+  --page: #fff;
+  --border: #dddde0;
+  --footer-text: #87878a;
+  --icon: #cccccf;
+
+  --sans: 'din-2014', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --letter-width: 8.5in;
+  --letter-height: 11in;
+  --padding-letter: 0.5in;
+  --padding-letter-bottom: 0.6956in;
+
+  font: 11pt/15pt var(--sans);
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  margin: 0;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+p {
+  margin: 0;
+}
+
+strong {
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-page: var(--page);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-h: var(--text-h);
+  --color-footer: var(--footer-text);
+  --color-icon: var(--icon);
+
+  --text-sans: var(--sans);
+
+  --spacing-letter-width: var(--letter-width);
+  --spacing-letter-height: var(--letter-height);
+  --spacing-letter: var(--padding-letter);
+}
+
+@layer components {
+  .page {
+    @apply w-letter-width max-w-letter-width h-letter-height max-h-letter-height p-letter pb-0 box-border bg-page break-after-page flex flex-col;
+  }
+}
+
+#date strong {
+  position: relative;
+  display: inline-block;
+}
+
+#date strong::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 100%;
+  margin-inline-start: 6pt;
+  width: 1pt;
+  height: 0.1892in;
+  transform: translateY(-50%) rotate(30deg);
+  background: var(--border);
+}
+
+footer p {
+  margin: 0;
+}
+
+.footer-details {
+  --footer-divider-slot: 0.7292in;
+
+  display: flex;
+  align-items: center;
+}
+
+.footer-column {
+  min-width: 0;
+}
+
+.footer-column a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.footer-divider {
+  position: relative;
+  flex: 0 0 var(--footer-divider-slot);
+  width: var(--footer-divider-slot);
+  height: 0.5in;
+}
+
+.footer-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1pt;
+  height: 0.5in;
+  background: var(--border);
+  transform: translate(-50%, -50%) rotate(30deg);
+}
