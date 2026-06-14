@@ -80,14 +80,21 @@ app.use(function errorHandler(error: unknown, _request: express.Request, respons
   void next;
 
   if (error instanceof ZodError) {
+    const details = error.issues.map(function mapIssue(issue) {
+      return {
+        path: issue.path.join('.'),
+        message: issue.message
+      };
+    });
+    const firstDetail = details[0];
+    const message = firstDetail
+      ? [ firstDetail.path, firstDetail.message ].filter(Boolean).join(': ')
+      : 'Invalid cover letter request';
+
     response.status(400).json({
       error: 'Invalid cover letter request',
-      details: error.issues.map(function mapIssue(issue) {
-        return {
-          path: issue.path.join('.'),
-          message: issue.message
-        };
-      })
+      message,
+      details
     });
     return;
   }
