@@ -47,9 +47,9 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
     const pdf = await renderCoverLetterPdf(coverLetterRequest);
     const filename = [
       'avana_vana',
-      slugifyFilename(coverLetterRequest.role),
+      slugifyFilenamePart(coverLetterRequest.role),
       'cover_letter',
-      slugifyFilename(coverLetterRequest.company),
+      slugifyFilenamePart(coverLetterRequest.company),
       formatFilenameDate()
     ].join('-') + '.pdf';
 
@@ -203,11 +203,11 @@ function parsePort(portValue: string | undefined) {
   return parsedPort;
 }
 
-function slugifyFilename(value: string) {
+function slugifyFilenamePart(value: string) {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '') || 'company';
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/(^_|_$)/g, '') || 'value';
 }
 
 function formatFilenameDate() {
