@@ -53,6 +53,12 @@ PUPPETEER_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google
 pnpm start
 ```
 
+If you are deploying to Render, use this build command so Chrome for Testing is installed into a project-local Puppeteer cache that is available at runtime:
+
+```bash
+pnpm install && pnpm run build:render
+```
+
 Example request:
 
 ```bash
@@ -76,3 +82,9 @@ The current service can run as a single Node web service that:
 - renders PDFs from the same deployed page
 
 That makes it a good fit for lightweight Git-based platforms like Render.
+
+For Render specifically:
+
+- Build Command: `pnpm install && pnpm run build:render`
+- Start Command: `pnpm start`
+- Health Check Path: `/api/healthz`

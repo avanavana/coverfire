@@ -25,21 +25,7 @@ const hasBuiltClient = fs.existsSync(indexPath);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 
-app.get('/api/health', function healthHandler(_request, response) {
-  response.json({
-    ok: true,
-    hasBuiltClient,
-    renderOrigin: getRenderOrigin()
-  });
-});
-
 app.get('/api/healthz', function healthzApiHandler(_request, response) {
-  response.json({
-    ok: true
-  });
-});
-
-app.get('/healthz', function healthzHandler(_request, response) {
   response.json({
     ok: true
   });
@@ -120,6 +106,10 @@ app.listen(port, host, function listenHandler() {
 
 async function renderCoverLetterPdf(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
   const browser = await puppeteer.launch({
+    args: [
+      '--disable-setuid-sandbox',
+      '--no-sandbox'
+    ],
     executablePath: puppeteerExecutablePath,
     headless: true
   });
