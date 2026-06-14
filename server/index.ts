@@ -45,7 +45,13 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
 
     const coverLetterRequest = parseCoverLetterRequest(request.body);
     const pdf = await renderCoverLetterPdf(coverLetterRequest);
-    const filename = `cover-letter-${slugifyFilename(coverLetterRequest.company)}.pdf`;
+    const filename = [
+      'avana_vana',
+      slugifyFilename(coverLetterRequest.role),
+      'cover_letter',
+      slugifyFilename(coverLetterRequest.company),
+      formatFilenameDate()
+    ].join('-') + '.pdf';
 
     response.setHeader('Content-Type', 'application/pdf');
     response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -202,4 +208,29 @@ function slugifyFilename(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '') || 'company';
+}
+
+function formatFilenameDate() {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    day: '2-digit',
+    month: '2-digit'
+  });
+  const parts = formatter.formatToParts(new Date());
+  const year = parts.find(function findPart(part) {
+    return part.type === 'year';
+  })?.value;
+  const day = parts.find(function findPart(part) {
+    return part.type === 'day';
+  })?.value;
+  const month = parts.find(function findPart(part) {
+    return part.type === 'month';
+  })?.value;
+
+  if (!year || !day || !month) {
+    throw new Error('Unable to format filename date.');
+  }
+
+  return `${year}-${day}-${month}`;
 }
