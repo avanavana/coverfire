@@ -9,7 +9,7 @@ The project currently has two parts:
 
 ## Request payload
 
-`POST /api/cover-letter/pdf`
+`POST /api/pdf`
 
 ```json
 {
@@ -56,7 +56,7 @@ pnpm start
 Example request:
 
 ```bash
-curl -X POST http://127.0.0.1:3000/api/cover-letter/pdf \
+curl -X POST http://127.0.0.1:3000/api/pdf \
   -H 'content-type: application/json' \
   -H 'x-coverfire-key: replace-me' \
   --data '{

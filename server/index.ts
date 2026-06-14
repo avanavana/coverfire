@@ -33,13 +33,19 @@ app.get('/api/health', function healthHandler(_request, response) {
   });
 });
 
+app.get('/api/healthz', function healthzApiHandler(_request, response) {
+  response.json({
+    ok: true
+  });
+});
+
 app.get('/healthz', function healthzHandler(_request, response) {
   response.json({
     ok: true
   });
 });
 
-app.post('/api/cover-letter/pdf', async function coverLetterPdfHandler(request, response, next) {
+app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
     ensureApiKeyConfiguration();
 
