@@ -34,6 +34,24 @@ const indexPath = path.join(distPath, 'index.html');
 const hasBuiltClient = fs.existsSync(indexPath);
 
 app.disable('x-powered-by');
+app.use(function localDevelopmentCorsHandler(request, response, next) {
+  const origin = request.header('origin');
+
+  if (origin && isAllowedDevelopmentOrigin(origin)) {
+    response.header('Access-Control-Allow-Origin', origin);
+    response.header('Access-Control-Allow-Headers', 'Content-Type, X-Coverfire-Key');
+    response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.header('Access-Control-Expose-Headers', 'Content-Disposition');
+    response.header('Vary', 'Origin');
+  }
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).end();
+    return;
+  }
+
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/healthz', function healthzApiHandler(_request, response) {
@@ -402,6 +420,10 @@ function parsePort(portValue: string | undefined) {
   }
 
   return parsedPort;
+}
+
+function isAllowedDevelopmentOrigin(origin: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 }
 
 function slugifyFilenamePart(value: string) {
