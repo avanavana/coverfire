@@ -36,6 +36,8 @@ Copy `.env.example` and provide values as needed:
 - `COVERFIRE_RENDER_ORIGIN`: optional render origin for local development when the Vite app is already running
 - `PUPPETEER_EXECUTABLE_PATH`: optional explicit Chrome/Chromium path
 - `PUPPETEER_CACHE_DIR`: optional explicit Puppeteer cache directory
+- `UPSTASH_REDIS_REST_URL`: Upstash Redis REST URL for persisted admin state
+- `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST token for persisted admin state
 
 ## Local development
 
@@ -73,6 +75,21 @@ curl -X POST http://127.0.0.1:3000/api/pdf \
   }' \
   --output cover-letter.pdf
 ```
+
+## Admin API
+
+The admin backend currently exposes:
+
+- `GET /api/admin`
+- `PUT /api/admin`
+- `POST /api/admin/body`
+- `GET /api/admin/body/:id`
+- `PUT /api/admin/body/:id`
+- `DELETE /api/admin/body/:id`
+- `POST /api/admin/body/:id/duplicate`
+- `POST /api/admin/body/:id/default`
+
+If Upstash credentials are configured, admin state is stored in Redis. Otherwise the server falls back to an in-memory document for local development only.
 
 ## Deployment notes
 

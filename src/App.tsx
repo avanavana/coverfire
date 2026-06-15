@@ -3,6 +3,8 @@ import { Fragment } from 'react';
 import { Email, GitHub, Link, LinkedIn } from '@/components/icons';
 import {
   buildCoverLetter,
+  createDefaultCoverLetterAdminDocument,
+  getCoverLetterAdminDocumentOverride,
   getCoverLetterPreviewRequest,
   getCoverLetterRequestOverrides
 } from '@/cover-letter';
@@ -20,8 +22,9 @@ const footerIconByKey = {
 function getPreviewCoverLetter() {
   const searchParams = new URLSearchParams(window.location.search);
   const request = getCoverLetterPreviewRequest(getCoverLetterRequestOverrides(searchParams));
+  const adminDocument = getCoverLetterAdminDocumentOverride(searchParams) || createDefaultCoverLetterAdminDocument();
 
-  return buildCoverLetter(request);
+  return buildCoverLetter(request, adminDocument);
 }
 
 function renderRoleWithAmpersandBreak(role: string) {

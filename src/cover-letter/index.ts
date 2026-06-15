@@ -18,12 +18,16 @@ export interface CoverLetterContactMethod {
   footerIcon?: 'email' | 'link' | 'linkedin' | 'github';
 }
 
-interface CoverLetterBodyVersion {
+export interface CoverLetterBodyVersion {
+  id: string;
   slug: string;
   name: string;
   greeting: string;
-  paragraphs: string[];
+  body: string;
   signOff: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CoverLetterTemplateValues {
@@ -51,6 +55,98 @@ interface CoverLetterDataModel {
   };
   bodyVersions: CoverLetterBodyVersion[];
 }
+
+export interface CoverLetterAdminDocument {
+  profile: {
+    name: string;
+    logoAlt: string;
+    addressLines: string[];
+    footerAddressLines: string[];
+    contacts: CoverLetterContactMethod[];
+  };
+  defaults: {
+    title: string;
+    hiringManager: string;
+    defaultBodyVersionId: string;
+  };
+  bodyVersions: CoverLetterBodyVersion[];
+}
+
+export const coverLetterContactMethodSchema: z.ZodType<CoverLetterContactMethod> = z.object({
+  id: z.enum([ 'email', 'website', 'linkedin', 'phone', 'github' ]),
+  label: z.string().trim().min(1),
+  value: z.string().trim().min(1),
+  href: z.string().trim().min(1).optional(),
+  includeInSignature: z.boolean(),
+  includeInFooter: z.boolean(),
+  footerIcon: z.enum([ 'email', 'link', 'linkedin', 'github' ]).optional()
+});
+
+export const coverLetterBodyVersionSchema: z.ZodType<CoverLetterBodyVersion> = z.object({
+  id: z.string().trim().min(1),
+  slug: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  greeting: z.string().trim().min(1),
+  body: z.string().trim().min(1),
+  signOff: z.string().trim().min(1),
+  isDefault: z.boolean(),
+  createdAt: z.string().trim().min(1),
+  updatedAt: z.string().trim().min(1)
+});
+
+export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument> = z.object({
+  profile: z.object({
+    name: z.string().trim().min(1),
+    logoAlt: z.string().trim().min(1),
+    addressLines: z.array(z.string().trim().min(1)),
+    footerAddressLines: z.array(z.string().trim().min(1)),
+    contacts: z.array(coverLetterContactMethodSchema)
+  }),
+  defaults: z.object({
+    title: z.string().trim().min(1),
+    hiringManager: z.string().trim().min(1),
+    defaultBodyVersionId: z.string().trim().min(1)
+  }),
+  bodyVersions: z.array(coverLetterBodyVersionSchema).min(1)
+}).superRefine(function validateAdminDocument(adminDocument, context) {
+  const bodyVersionIds = new Set(adminDocument.bodyVersions.map(function mapBodyVersionId(bodyVersion) {
+    return bodyVersion.id;
+  }));
+  const bodyVersionSlugs = new Set<string>();
+  let defaultCount = 0;
+
+  for (const bodyVersion of adminDocument.bodyVersions) {
+    if (bodyVersionSlugs.has(bodyVersion.slug)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [ 'bodyVersions' ],
+        message: `Duplicate body version slug: ${bodyVersion.slug}`
+      });
+    }
+
+    bodyVersionSlugs.add(bodyVersion.slug);
+
+    if (bodyVersion.isDefault) {
+      defaultCount += 1;
+    }
+  }
+
+  if (!bodyVersionIds.has(adminDocument.defaults.defaultBodyVersionId)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [ 'defaults', 'defaultBodyVersionId' ],
+      message: 'Default body version id must reference an existing body version.'
+    });
+  }
+
+  if (defaultCount !== 1) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [ 'bodyVersions' ],
+      message: 'Exactly one body version must be marked as default.'
+    });
+  }
+});
 
 export interface ResolvedCoverLetter {
   date: string;
@@ -155,17 +251,21 @@ export const coverLetterDataModel: CoverLetterDataModel = {
   },
   bodyVersions: [
     {
+      id: 'standard',
       slug: 'standard',
       name: 'Standard',
       greeting: 'Dear {{hiringManager}},',
-      paragraphs: [
+      body: [
         "I hope this message finds you well. I'm a {{titlePlainText}} with 15+ years of experience designing, building, and shipping production web and mobile applications, and I'm writing to express my interest in the {{role}} role at {{company}}.",
         "My career has spanned product strategy, UI/UX design, user research, design systems, front-end engineering, systems architecture, and team leadership. I specialize in distilling complex and embryonic ideas into refined products, brands, and user experiences. Having worked extensively across both design and engineering, I bring a developer's implementation expertise and systems thinking to design work, and a designer's sense of taste, discernment, craft, and user perspective to engineering.",
         'Most recently, as Design Lead at CO:CREATE, I led product design for a new universal mobile and web application, established a new brand identity and design system, and helped evolve that system to support emerging AI-native workflows through a formalized component architecture and implementation guidelines designed to reduce ambiguity and improve consistency across both human and agent-generated work.',
         "The rise of AI has only reinforced a belief I've held about building software: as generating product ideas, designs, and code becomes faster, cheaper, and more accessible, the value of discernment, judgment, systems thinking, and multidisciplinary expertise increases. The challenge is no longer generating possibilities—it is identifying the right opportunities, understanding tradeoffs, making better decisions, and synthesizing many moving parts into coherent products that serve both users and business goals. These are the very capabilities I've spent my career cultivating at the intersection of design, engineering, and systems thinking.",
         'I would welcome the opportunity to bring that perspective and experience to {{company}}. Thank you for your time and consideration, and I look forward to speaking with you.'
-      ],
-      signOff: 'Warm regards,'
+      ].join('\n\n'),
+      signOff: 'Warm regards,',
+      isDefault: true,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      updatedAt: '2026-06-14T00:00:00.000Z'
     }
   ]
 };
@@ -203,6 +303,10 @@ export function buildCoverLetterSearchParams(request: Partial<CoverLetterRequest
   return searchParams;
 }
 
+export function serializeCoverLetterAdminDocument(adminDocument: CoverLetterAdminDocument) {
+  return JSON.stringify(coverLetterAdminDocumentSchema.parse(adminDocument));
+}
+
 export function getCoverLetterRequestOverrides(searchParams: URLSearchParams): Partial<CoverLetterRequest> {
   return normalizeCoverLetterRequest({
     hiringManager: searchParams.get('hiringManager') || undefined,
@@ -213,11 +317,47 @@ export function getCoverLetterRequestOverrides(searchParams: URLSearchParams): P
   });
 }
 
-export function buildCoverLetter(request: CoverLetterRequest = coverLetterPreviewRequest): ResolvedCoverLetter {
-  const hiringManager = request.hiringManager || coverLetterDataModel.defaults.hiringManager;
-  const title = request.title || coverLetterDataModel.defaults.title;
-  const bodyVersionSlug = request.bodyVersionSlug || coverLetterDataModel.defaults.bodyVersionSlug;
-  const bodyVersion = getBodyVersion(bodyVersionSlug);
+export function getCoverLetterAdminDocumentOverride(searchParams: URLSearchParams) {
+  const adminDocument = searchParams.get('adminDocument');
+
+  if (!adminDocument) {
+    return null;
+  }
+
+  try {
+    return coverLetterAdminDocumentSchema.parse(JSON.parse(adminDocument));
+  } catch {
+    return null;
+  }
+}
+
+export function createDefaultCoverLetterAdminDocument(): CoverLetterAdminDocument {
+  return {
+    profile: {
+      name: coverLetterDataModel.profile.name,
+      logoAlt: coverLetterDataModel.profile.logoAlt,
+      addressLines: coverLetterDataModel.profile.addressLines,
+      footerAddressLines: coverLetterDataModel.profile.footerAddressLines,
+      contacts: coverLetterDataModel.profile.contacts
+    },
+    defaults: {
+      title: coverLetterDataModel.defaults.title,
+      hiringManager: coverLetterDataModel.defaults.hiringManager,
+      defaultBodyVersionId: coverLetterDataModel.bodyVersions.find(function findDefaultBodyVersion(bodyVersion) {
+        return bodyVersion.isDefault;
+      })?.id || coverLetterDataModel.bodyVersions[0].id
+    },
+    bodyVersions: coverLetterDataModel.bodyVersions
+  };
+}
+
+export function buildCoverLetter(
+  request: CoverLetterRequest = coverLetterPreviewRequest,
+  adminDocument: CoverLetterAdminDocument = createDefaultCoverLetterAdminDocument()
+): ResolvedCoverLetter {
+  const hiringManager = request.hiringManager || adminDocument.defaults.hiringManager;
+  const title = request.title || adminDocument.defaults.title;
+  const bodyVersion = getBodyVersion(adminDocument, request.bodyVersionSlug);
   const templateValues = {
     hiringManager,
     title,
@@ -239,46 +379,40 @@ export function buildCoverLetter(request: CoverLetterRequest = coverLetterPrevie
     },
     body: {
       greeting: resolveTemplate(bodyVersion.greeting, templateValues),
-      paragraphs: bodyVersion.paragraphs.map(function mapParagraph(paragraph) {
+      paragraphs: splitBodyIntoParagraphs(bodyVersion.body).map(function mapParagraph(paragraph) {
         return resolveTemplate(paragraph, templateValues);
       }),
       signOff: resolveTemplate(bodyVersion.signOff, templateValues)
     },
     signature: {
-      name: coverLetterDataModel.profile.name,
+      name: adminDocument.profile.name,
       title,
-      contacts: getOrderedContacts('signature')
+      contacts: getOrderedContacts(adminDocument, 'signature')
     },
     footer: {
-      logoAlt: coverLetterDataModel.profile.logoAlt,
-      name: coverLetterDataModel.profile.name,
+      logoAlt: adminDocument.profile.logoAlt,
+      name: adminDocument.profile.name,
       title,
-      addressLines: coverLetterDataModel.profile.footerAddressLines,
-      contacts: getOrderedContacts('footer')
+      addressLines: adminDocument.profile.footerAddressLines,
+      contacts: getOrderedContacts(adminDocument, 'footer')
     }
   };
 }
 
-function getBodyVersion(bodyVersionSlug: string): CoverLetterBodyVersion {
-  return coverLetterDataModel.bodyVersions.find(function findBodyVersion(bodyVersion) {
-    return bodyVersion.slug === bodyVersionSlug;
-  }) || coverLetterDataModel.bodyVersions[0];
+function getBodyVersion(adminDocument: CoverLetterAdminDocument, bodyVersionSlug?: string): CoverLetterBodyVersion {
+  if (bodyVersionSlug) {
+    return adminDocument.bodyVersions.find(function findBodyVersionBySlug(bodyVersion) {
+      return bodyVersion.slug === bodyVersionSlug;
+    }) || adminDocument.bodyVersions[0];
+  }
+
+  return adminDocument.bodyVersions.find(function findDefaultBodyVersion(bodyVersion) {
+    return bodyVersion.id === adminDocument.defaults.defaultBodyVersionId;
+  }) || adminDocument.bodyVersions[0];
 }
 
-function getOrderedContacts(location: 'signature' | 'footer'): CoverLetterContactMethod[] {
-  const orderedIds = location === 'signature'
-    ? coverLetterDataModel.profile.signatureContactIds
-    : coverLetterDataModel.profile.footerContactIds;
-
-  return orderedIds.map(function mapContactId(contactId) {
-    return coverLetterDataModel.profile.contacts.find(function findContact(contact) {
-      return contact.id === contactId;
-    });
-  }).filter(function filterContact(contact): contact is CoverLetterContactMethod {
-    if (!contact) {
-      return false;
-    }
-
+function getOrderedContacts(adminDocument: CoverLetterAdminDocument, location: 'signature' | 'footer'): CoverLetterContactMethod[] {
+  return adminDocument.profile.contacts.filter(function filterContact(contact) {
     return location === 'signature' ? contact.includeInSignature : contact.includeInFooter;
   });
 }
@@ -309,6 +443,15 @@ function normalizeCoverLetterRequest(input: unknown): Partial<CoverLetterRequest
       return [[ key, normalizedValue ]];
     })
   ) as Partial<CoverLetterRequest>;
+}
+
+function splitBodyIntoParagraphs(body: string) {
+  return body
+    .split(/\n\s*\n/g)
+    .map(function mapParagraph(paragraph) {
+      return paragraph.trim();
+    })
+    .filter(Boolean);
 }
 
 function formatLetterDate(): string {

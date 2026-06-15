@@ -7,6 +7,16 @@ import puppeteer from 'puppeteer';
 import { ZodError } from 'zod';
 
 import {
+  adminBodyVersionInputSchema,
+  adminDocumentSchema,
+  buildBodyVersion,
+  getAdminDocument,
+  saveAdminDocument
+} from './admin-store.ts';
+import {
+  type CoverLetterAdminDocument,
+  type CoverLetterBodyVersion,
+  buildCoverLetter,
   buildCoverLetterSearchParams,
   parseCoverLetterRequest
 } from '../src/cover-letter/index.ts';
@@ -32,6 +42,175 @@ app.get('/api/healthz', function healthzApiHandler(_request, response) {
   });
 });
 
+app.get('/api/admin', async function adminHandler(_request, response, next) {
+  try {
+    const adminDocument = await getAdminDocument();
+
+    response.json(adminDocument);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin', async function updateAdminHandler(request, response, next) {
+  try {
+    const adminDocument = adminDocumentSchema.parse(request.body);
+    const savedAdminDocument = await saveAdminDocument(adminDocument);
+
+    response.json(savedAdminDocument);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/body', async function createAdminBodyHandler(request, response, next) {
+  try {
+    const input = adminBodyVersionInputSchema.parse(request.body);
+    const adminDocument = await getAdminDocument();
+    const newBodyVersion = buildBodyVersion(input);
+    const nextAdminDocument = {
+      ...adminDocument,
+      bodyVersions: [
+        ...adminDocument.bodyVersions,
+        newBodyVersion
+      ]
+    };
+    const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
+
+    response.status(201).json(getBodyVersionById(savedAdminDocument, newBodyVersion.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/body/:id', async function adminBodyDetailHandler(request, response, next) {
+  try {
+    const adminDocument = await getAdminDocument();
+    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+
+    response.json(bodyVersion);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/body/:id', async function updateAdminBodyHandler(request, response, next) {
+  try {
+    const input = adminBodyVersionInputSchema.parse(request.body);
+    const adminDocument = await getAdminDocument();
+    const existingBodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const nextBodyVersion = buildBodyVersion(input, existingBodyVersion);
+    const nextAdminDocument = {
+      ...adminDocument,
+      bodyVersions: adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
+        return bodyVersion.id === request.params.id ? nextBodyVersion : bodyVersion;
+      })
+    };
+    const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
+
+    response.json(getBodyVersionById(savedAdminDocument, request.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/body/:id', async function deleteAdminBodyHandler(request, response, next) {
+  try {
+    const adminDocument = await getAdminDocument();
+
+    if (adminDocument.bodyVersions.length === 1) {
+      response.status(400).json({
+        error: 'Cannot delete the only body version.'
+      });
+      return;
+    }
+
+    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const remainingBodyVersions = adminDocument.bodyVersions.filter(function filterBodyVersion(candidateBodyVersion) {
+      return candidateBodyVersion.id !== bodyVersion.id;
+    });
+    const nextDefaultBodyVersionId = adminDocument.defaults.defaultBodyVersionId === bodyVersion.id
+      ? remainingBodyVersions[0].id
+      : adminDocument.defaults.defaultBodyVersionId;
+    const nextAdminDocument = {
+      ...adminDocument,
+      defaults: {
+        ...adminDocument.defaults,
+        defaultBodyVersionId: nextDefaultBodyVersionId
+      },
+      bodyVersions: remainingBodyVersions.map(function mapBodyVersion(candidateBodyVersion) {
+        return {
+          ...candidateBodyVersion,
+          isDefault: candidateBodyVersion.id === nextDefaultBodyVersionId
+        };
+      })
+    };
+
+    await saveAdminDocument(nextAdminDocument);
+
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/body/:id/duplicate', async function duplicateAdminBodyHandler(request, response, next) {
+  try {
+    const adminDocument = await getAdminDocument();
+    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const duplicatedSlug = buildUniqueSlug(adminDocument, `${bodyVersion.slug}-copy`);
+    const duplicatedBodyVersion = {
+      ...bodyVersion,
+      id: crypto.randomUUID(),
+      name: `Copy of ${bodyVersion.name}`,
+      slug: duplicatedSlug,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const nextAdminDocument = {
+      ...adminDocument,
+      bodyVersions: [
+        ...adminDocument.bodyVersions,
+        duplicatedBodyVersion
+      ]
+    };
+    const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
+
+    response.status(201).json(getBodyVersionById(savedAdminDocument, duplicatedBodyVersion.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/body/:id/default', async function defaultAdminBodyHandler(request, response, next) {
+  try {
+    const adminDocument = await getAdminDocument();
+    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const nextAdminDocument = {
+      ...adminDocument,
+      defaults: {
+        ...adminDocument.defaults,
+        defaultBodyVersionId: bodyVersion.id
+      },
+      bodyVersions: adminDocument.bodyVersions.map(function mapBodyVersion(candidateBodyVersion) {
+        return {
+          ...candidateBodyVersion,
+          isDefault: candidateBodyVersion.id === bodyVersion.id,
+          updatedAt: candidateBodyVersion.id === bodyVersion.id
+            ? new Date().toISOString()
+            : candidateBodyVersion.updatedAt
+        };
+      })
+    };
+    const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
+
+    response.json(getBodyVersionById(savedAdminDocument, bodyVersion.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
     ensureApiKeyConfiguration();
@@ -44,7 +223,8 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
     }
 
     const coverLetterRequest = parseCoverLetterRequest(request.body);
-    const pdf = await renderCoverLetterPdf(coverLetterRequest);
+    const adminDocument = await getAdminDocument();
+    const pdf = await renderCoverLetterPdf(coverLetterRequest, adminDocument);
     const filename = [
       'avana_vana',
       slugifyFilenamePart(coverLetterRequest.role),
@@ -120,7 +300,10 @@ app.listen(port, host, function listenHandler() {
   console.log(`Puppeteer cache exists: ${fs.existsSync(puppeteerCacheDirectory)}`);
 });
 
-async function renderCoverLetterPdf(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+async function renderCoverLetterPdf(
+  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
+  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>
+) {
   const browser = await puppeteer.launch({
     args: [
       '--disable-setuid-sandbox',
@@ -132,7 +315,7 @@ async function renderCoverLetterPdf(coverLetterRequest: ReturnType<typeof parseC
 
   try {
     const page = await browser.newPage();
-    const renderUrl = buildRenderUrl(coverLetterRequest);
+    const renderUrl = buildRenderUrl(coverLetterRequest, adminDocument);
 
     await page.goto(renderUrl, { waitUntil: 'networkidle0' });
     await page.evaluateHandle('document.fonts.ready');
@@ -147,7 +330,10 @@ async function renderCoverLetterPdf(coverLetterRequest: ReturnType<typeof parseC
   }
 }
 
-function buildRenderUrl(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+function buildRenderUrl(
+  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
+  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>
+) {
   const renderOrigin = getRenderOrigin();
 
   if (!renderOrigin) {
@@ -157,8 +343,16 @@ function buildRenderUrl(coverLetterRequest: ReturnType<typeof parseCoverLetterRe
   }
 
   const renderUrl = new URL('/', renderOrigin);
+  const resolvedCoverLetter = buildCoverLetter(coverLetterRequest, adminDocument);
+  const adminDocumentJson = JSON.stringify(adminDocument);
 
-  renderUrl.search = buildCoverLetterSearchParams(coverLetterRequest).toString();
+  renderUrl.search = buildCoverLetterSearchParams({
+    ...coverLetterRequest,
+    hiringManager: resolvedCoverLetter.recipient.hiringManager,
+    title: resolvedCoverLetter.signature.title,
+    bodyVersionSlug: resolvedCoverLetter.bodyVersion.slug
+  }).toString();
+  renderUrl.searchParams.set('adminDocument', adminDocumentJson);
 
   return renderUrl.toString();
 }
@@ -240,4 +434,30 @@ function formatFilenameDate() {
   }
 
   return `${year}-${day}-${month}`;
+}
+
+function getBodyVersionById(adminDocument: CoverLetterAdminDocument, bodyVersionId: string) {
+  const bodyVersion = adminDocument.bodyVersions.find(function findBodyVersion(candidateBodyVersion: CoverLetterBodyVersion) {
+    return candidateBodyVersion.id === bodyVersionId;
+  });
+
+  if (!bodyVersion) {
+    throw new Error(`Body version not found: ${bodyVersionId}`);
+  }
+
+  return bodyVersion;
+}
+
+function buildUniqueSlug(adminDocument: CoverLetterAdminDocument, baseSlug: string) {
+  let nextSlug = baseSlug;
+  let suffix = 2;
+
+  while (adminDocument.bodyVersions.some(function someBodyVersion(bodyVersion: CoverLetterBodyVersion) {
+    return bodyVersion.slug === nextSlug;
+  })) {
+    nextSlug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return nextSlug;
 }
