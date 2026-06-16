@@ -27,6 +27,9 @@ import {
 const host = process.env.HOST || '0.0.0.0';
 const port = parsePort(process.env.PORT);
 const apiKey = process.env.COVERFIRE_API_KEY;
+const adminBasicAuthUsername = process.env.ADMIN_BASIC_AUTH_USERNAME;
+const adminBasicAuthPassword = process.env.ADMIN_BASIC_AUTH_PASSWORD;
+const adminBasicAuthRealm = process.env.ADMIN_BASIC_AUTH_REALM || 'Coverfire Admin';
 const configuredRenderOrigin = process.env.COVERFIRE_RENDER_ORIGIN;
 const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
 const puppeteerCacheDirectory = process.env.PUPPETEER_CACHE_DIR || path.resolve(process.cwd(), '.cache', 'puppeteer');
@@ -37,12 +40,13 @@ const indexPath = path.join(distPath, 'index.html');
 const hasBuiltClient = fs.existsSync(indexPath);
 
 app.disable('x-powered-by');
+validateAdminBasicAuthConfiguration();
 app.use(function localDevelopmentCorsHandler(request, response, next) {
   const origin = request.header('origin');
 
   if (origin && isAllowedDevelopmentOrigin(origin)) {
     response.header('Access-Control-Allow-Origin', origin);
-    response.header('Access-Control-Allow-Headers', 'Content-Type, X-Coverfire-Key');
+    response.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Coverfire-Key');
     response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.header('Access-Control-Expose-Headers', 'Content-Disposition');
     response.header('Vary', 'Origin');
@@ -56,6 +60,8 @@ app.use(function localDevelopmentCorsHandler(request, response, next) {
   next();
 });
 app.use(express.json({ limit: '1mb' }));
+app.use('/admin', adminBasicAuthMiddleware);
+app.use('/api/admin', adminBasicAuthMiddleware);
 
 app.get('/api/healthz', function healthzApiHandler(_request, response) {
   response.json({
@@ -465,6 +471,48 @@ function ensureApiKeyConfiguration() {
   }
 }
 
+function adminBasicAuthMiddleware(
+  request: express.Request,
+  response: express.Response,
+  next: express.NextFunction
+) {
+  if (!isAdminBasicAuthEnabled()) {
+    next();
+    return;
+  }
+
+  const authorizationHeader = request.header('authorization');
+  const credentials = parseBasicAuthorizationHeader(authorizationHeader);
+
+  if (!credentials || !isAuthorizedAdminRequest(credentials.username, credentials.password)) {
+    response.setHeader('WWW-Authenticate', `Basic realm="${adminBasicAuthRealm}", charset="UTF-8"`);
+    response.status(401).type('text/plain').send('Authentication required.');
+    return;
+  }
+
+  next();
+}
+
+function validateAdminBasicAuthConfiguration() {
+  const hasAdminBasicAuthUsername = typeof adminBasicAuthUsername === 'string' && adminBasicAuthUsername.length > 0;
+  const hasAdminBasicAuthPassword = typeof adminBasicAuthPassword === 'string' && adminBasicAuthPassword.length > 0;
+
+  if (hasAdminBasicAuthUsername === hasAdminBasicAuthPassword) {
+    return;
+  }
+
+  throw new Error(
+    'Set both `ADMIN_BASIC_AUTH_USERNAME` and `ADMIN_BASIC_AUTH_PASSWORD`, or leave both unset.'
+  );
+}
+
+function isAdminBasicAuthEnabled() {
+  return typeof adminBasicAuthUsername === 'string'
+    && adminBasicAuthUsername.length > 0
+    && typeof adminBasicAuthPassword === 'string'
+    && adminBasicAuthPassword.length > 0;
+}
+
 function isAuthorizedRequest(requestApiKey: string | undefined) {
   if (!apiKey || !requestApiKey) {
     return false;
@@ -478,6 +526,44 @@ function isAuthorizedRequest(requestApiKey: string | undefined) {
   }
 
   return crypto.timingSafeEqual(expectedApiKey, providedApiKey);
+}
+
+function isAuthorizedAdminRequest(username: string, password: string) {
+  if (!adminBasicAuthUsername || !adminBasicAuthPassword) {
+    return false;
+  }
+
+  const expectedUsername = Buffer.from(adminBasicAuthUsername);
+  const providedUsername = Buffer.from(username);
+  const expectedPassword = Buffer.from(adminBasicAuthPassword);
+  const providedPassword = Buffer.from(password);
+
+  return expectedUsername.length === providedUsername.length
+    && expectedPassword.length === providedPassword.length
+    && crypto.timingSafeEqual(expectedUsername, providedUsername)
+    && crypto.timingSafeEqual(expectedPassword, providedPassword);
+}
+
+function parseBasicAuthorizationHeader(authorizationHeader: string | undefined) {
+  if (!authorizationHeader?.startsWith('Basic ')) {
+    return null;
+  }
+
+  try {
+    const decodedCredentials = Buffer.from(authorizationHeader.slice('Basic '.length), 'base64').toString('utf8');
+    const separatorIndex = decodedCredentials.indexOf(':');
+
+    if (separatorIndex < 0) {
+      return null;
+    }
+
+    return {
+      username: decodedCredentials.slice(0, separatorIndex),
+      password: decodedCredentials.slice(separatorIndex + 1)
+    };
+  } catch {
+    return null;
+  }
 }
 
 function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-06-16
+
+### Added
+
+- Add optional HTTP Basic Auth protection for `/admin`, `/admin/preview`, and `/api/admin*` using environment-configured credentials
+- Document the admin Basic Auth environment variables in `.env.example`
+
 ## [1.1.0] - 2026-06-16
 
 ### Added
