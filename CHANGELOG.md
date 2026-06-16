@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-06-16
+
+### Fixed
+
+- Downgrade the frontend toolchain from Vite 8 to Vite 7 to avoid the Render production build resolver failure in Rolldown
+
 ## [1.0.3] - 2026-06-16
 
 ### Fixed
