@@ -4,11 +4,15 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
+import type { UserConfig } from 'vite';
+
+const experimentalOptions = {
+  enableNativePlugin: false
+} as unknown as NonNullable<UserConfig['experimental']>;
+
 // https://vite.dev/config/
 export default defineConfig({
-  experimental: {
-    enableNativePlugin: false
-  },
+  experimental: experimentalOptions,
   server: {
     proxy: {
       '/api': {

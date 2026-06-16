@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-06-16
+
+### Fixed
+
+- Cast the Vite experimental resolver workaround through `UserConfig` so TypeScript accepts the production-build configuration on Render
+
 ## [1.0.2] - 2026-06-16
 
 ### Fixed
