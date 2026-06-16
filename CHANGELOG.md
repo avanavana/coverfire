@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-06-16
+
+### Fixed
+
+- Disable Vite 8's native Rolldown resolver so Render production builds avoid the `tslib` resolution bug triggered by `react-remove-scroll`
+
 ## [1.0.1] - 2026-06-16
 
 ### Fixed
