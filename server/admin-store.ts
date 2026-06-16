@@ -1,4 +1,8 @@
+import './env.ts';
+
+import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
+import path from 'node:path';
 
 import { Redis } from '@upstash/redis';
 import { z } from 'zod';
@@ -6,11 +10,13 @@ import { z } from 'zod';
 import {
   coverLetterAdminDocumentSchema,
   createDefaultCoverLetterAdminDocument,
+  normalizeCoverLetterAdminDocument,
   type CoverLetterAdminDocument,
   type CoverLetterBodyVersion
 } from '../src/cover-letter/index.ts';
 
 const ADMIN_DOCUMENT_KEY = 'coverfire:admin';
+const localStorePath = process.env.COVERFIRE_LOCAL_STORE_PATH || path.resolve(process.cwd(), '.data', 'coverfire-admin.json');
 const upstashRedisRestUrl = process.env.UPSTASH_REDIS_REST_URL;
 const upstashRedisRestToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 const redis = upstashRedisRestUrl && upstashRedisRestToken
@@ -33,6 +39,8 @@ export const adminBodyVersionInputSchema = z.object({
 
 export async function getAdminDocument() {
   if (!redis) {
+    await loadLocalAdminDocument();
+
     return localAdminDocument;
   }
 
@@ -44,14 +52,17 @@ export async function getAdminDocument() {
     return localAdminDocument;
   }
 
-  return adminDocumentSchema.parse(storedDocument);
+  return normalizeCoverLetterAdminDocument(storedDocument);
 }
 
 export async function saveAdminDocument(adminDocument: CoverLetterAdminDocument) {
-  const parsedDocument = adminDocumentSchema.parse(adminDocument);
+  const parsedDocument = adminDocumentSchema.parse(
+    normalizeCoverLetterAdminDocument(adminDocument)
+  );
 
   if (!redis) {
     localAdminDocument = parsedDocument;
+    await writeLocalAdminDocument(localAdminDocument);
 
     return localAdminDocument;
   }
@@ -75,4 +86,32 @@ export function buildBodyVersion(input: z.infer<typeof adminBodyVersionInputSche
     createdAt: existingBodyVersion?.createdAt || timestamp,
     updatedAt: timestamp
   };
+}
+
+async function loadLocalAdminDocument() {
+  try {
+    const fileContents = await fs.readFile(localStorePath, 'utf8');
+
+    localAdminDocument = normalizeCoverLetterAdminDocument(JSON.parse(fileContents));
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      await writeLocalAdminDocument(localAdminDocument);
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function writeLocalAdminDocument(adminDocument: CoverLetterAdminDocument) {
+  await fs.mkdir(path.dirname(localStorePath), { recursive: true });
+  await fs.writeFile(localStorePath, JSON.stringify(adminDocument, null, 2));
+}
+
+function isMissingFileError(error: unknown) {
+  if (!error || typeof error !== 'object' || !('code' in error)) {
+    return false;
+  }
+
+  return error.code === 'ENOENT';
 }

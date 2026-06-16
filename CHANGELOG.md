@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-06-16
+
+### Added
+
+- Add a full `/admin` editing interface for managing body versions, signature fields, footer fields, and on-demand PDF generation
+- Add admin API routes for loading and saving admin state, managing body versions, and generating preview PDFs from draft content
+- Add local JSON persistence fallback for admin data when Redis is not configured
+- Add support for optional request-level `salutation` overrides to customize the greeting independently of the hiring manager
+
+### Changed
+
+- Reorganize local scripts so frontend and server can run together or independently with dedicated `dev:*` and `start:*` commands
+- Move the cover-letter content into a richer shared data model that supports editable body versions and configurable signature/footer fields
+- Update the admin generate flow to support conditional salutation editing and better preview behavior
+- Scope Sonner toasts to the admin route so the print/render route stays isolated from admin UI chrome
+
+### Fixed
+
+- Prevent blank trailing PDF pages by restricting generated output to the single intended page
+- Improve local admin resilience by falling back to cached state and retrying when the API is briefly unavailable
+- Validate saved contact fields so website, LinkedIn, GitHub, email, and phone values must match the expected formats
+- Preserve health and PDF API behavior while improving local render-origin fallback and filename generation
+
 ## [0.1.0] - 2026-06-14
 
 ### Changed

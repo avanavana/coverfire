@@ -8,6 +8,11 @@ export interface AdminBodyVersionInput {
   signOff: string;
 }
 
+interface GenerateAdminPdfOptions {
+  previewBodyVersion?: AdminBodyVersionInput;
+  previewBodyVersionId?: string;
+}
+
 interface ApiErrorDetail {
   path: string;
   message: string;
@@ -18,6 +23,9 @@ interface ApiErrorPayload {
   message?: string;
   details?: ApiErrorDetail[];
 }
+
+const adminRequestTimeoutMs = 1500;
+const pdfRequestTimeoutMs = 30000;
 
 export class AdminApiError extends Error {
   details?: ApiErrorDetail[];
@@ -74,14 +82,44 @@ export async function setDefaultBodyVersion(id: string) {
   });
 }
 
+export async function generateAdminPdf(requestBody: CoverLetterRequest, options: GenerateAdminPdfOptions = {}) {
+  const response = await fetchWithRetry(buildApiUrl('/api/admin/generate'), {
+    body: JSON.stringify({
+      ...requestBody,
+      previewBodyVersion: options.previewBodyVersion,
+      previewBodyVersionId: options.previewBodyVersionId
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(typeof window !== 'undefined'
+        ? { 'X-Coverfire-Render-Origin': window.location.origin }
+        : {})
+    },
+    method: 'POST'
+  }, {
+    timeoutMs: pdfRequestTimeoutMs
+  });
+
+  if (!response.ok) {
+    throw await buildError(response);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getFilenameFromDisposition(response.headers.get('Content-Disposition'))
+  };
+}
+
 export async function generatePdf(requestBody: CoverLetterRequest, apiKey: string) {
-  const response = await fetch(buildApiUrl('/api/pdf'), {
+  const response = await fetchWithRetry(buildApiUrl('/api/pdf'), {
     body: JSON.stringify(requestBody),
     headers: {
       'Content-Type': 'application/json',
       'X-Coverfire-Key': apiKey
     },
     method: 'POST'
+  }, {
+    timeoutMs: pdfRequestTimeoutMs
   });
 
   if (!response.ok) {
@@ -95,12 +133,14 @@ export async function generatePdf(requestBody: CoverLetterRequest, apiKey: strin
 }
 
 async function request<T>(path: string, init: RequestInit = {}) {
-  const response = await fetch(buildApiUrl(path), {
+  const response = await fetchWithRetry(buildApiUrl(path), {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(init.headers || {})
     }
+  }, {
+    timeoutMs: adminRequestTimeoutMs
   });
 
   if (!response.ok) {
@@ -112,6 +152,51 @@ async function request<T>(path: string, init: RequestInit = {}) {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  options: {
+    timeoutMs: number;
+  }
+) {
+  const candidateUrls = getCandidateApiUrls(url);
+  let lastError: unknown = null;
+
+  for (const candidateUrl of candidateUrls) {
+    try {
+      return await fetchWithTimeout(candidateUrl, init, options.timeoutMs);
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetriableNetworkError(error)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const abortController = new AbortController();
+  const cleanupAbortListener = init.signal
+    ? subscribeToAbort(init.signal, abortController)
+    : null;
+  const timeoutId = window.setTimeout(function abortSlowRequest() {
+    abortController.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: abortController.signal
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+    cleanupAbortListener?.();
+  }
 }
 
 async function buildError(response: Response) {
@@ -127,17 +212,56 @@ async function buildError(response: Response) {
 }
 
 function buildApiUrl(path: string) {
-  if (typeof window === 'undefined') {
-    return path;
-  }
-
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    if (window.location.port === '5173' || window.location.port === '4173') {
-      return `http://${window.location.hostname}:3000${path}`;
-    }
-  }
-
   return path;
+}
+
+function getCandidateApiUrls(url: string) {
+  if (typeof window === 'undefined') {
+    return [ url ];
+  }
+
+  try {
+    const parsedUrl = new URL(url, window.location.origin);
+    const candidateUrls = [ parsedUrl.toString() ];
+
+    if (parsedUrl.pathname.startsWith('/api/') && (window.location.port === '5173' || window.location.port === '4173')) {
+      candidateUrls.push(`http://127.0.0.1:3000${parsedUrl.pathname}${parsedUrl.search}`);
+      candidateUrls.push(`http://localhost:3000${parsedUrl.pathname}${parsedUrl.search}`);
+    }
+
+    if (parsedUrl.hostname === 'localhost') {
+      candidateUrls.push(parsedUrl.toString().replace('://localhost', '://127.0.0.1'));
+    }
+
+    if (parsedUrl.hostname === '127.0.0.1') {
+      candidateUrls.push(parsedUrl.toString().replace('://127.0.0.1', '://localhost'));
+    }
+
+    return Array.from(new Set(candidateUrls));
+  } catch {
+    return [ url ];
+  }
+}
+
+function isRetriableNetworkError(error: unknown) {
+  return error instanceof TypeError || error instanceof DOMException;
+}
+
+function subscribeToAbort(signal: AbortSignal, abortController: AbortController) {
+  if (signal.aborted) {
+    abortController.abort();
+    return null;
+  }
+
+  function abortFromSignal() {
+    abortController.abort();
+  }
+
+  signal.addEventListener('abort', abortFromSignal, { once: true });
+
+  return function cleanupAbortSubscription() {
+    signal.removeEventListener('abort', abortFromSignal);
+  };
 }
 
 function getFilenameFromDisposition(disposition: string | null) {

@@ -1,9 +1,11 @@
+import './env.ts';
+
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import express from 'express';
-import puppeteer from 'puppeteer';
+import puppeteer, { type Page } from 'puppeteer';
 import { ZodError } from 'zod';
 
 import {
@@ -229,6 +231,28 @@ app.post('/api/admin/body/:id/default', async function defaultAdminBodyHandler(r
   }
 });
 
+app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, response, next) {
+  try {
+    const coverLetterRequest = parseCoverLetterRequest(request.body);
+    const adminDocument = applyPreviewBodyVersion(
+      await getAdminDocument(),
+      request.body.previewBodyVersionId,
+      request.body.previewBodyVersion
+    );
+    const pdf = await renderCoverLetterPdf(
+      coverLetterRequest,
+      adminDocument,
+      getRequestedRenderOrigin(request)
+    );
+
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `attachment; filename="${buildPdfFilename(coverLetterRequest)}"`);
+    response.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
     ensureApiKeyConfiguration();
@@ -243,16 +267,9 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
     const coverLetterRequest = parseCoverLetterRequest(request.body);
     const adminDocument = await getAdminDocument();
     const pdf = await renderCoverLetterPdf(coverLetterRequest, adminDocument);
-    const filename = [
-      'avana_vana',
-      slugifyFilenamePart(coverLetterRequest.role),
-      'cover_letter',
-      slugifyFilenamePart(coverLetterRequest.company),
-      formatFilenameDate()
-    ].join('-') + '.pdf';
 
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    response.setHeader('Content-Disposition', `attachment; filename="${buildPdfFilename(coverLetterRequest)}"`);
     response.send(pdf);
   } catch (error) {
     next(error);
@@ -320,7 +337,8 @@ app.listen(port, host, function listenHandler() {
 
 async function renderCoverLetterPdf(
   coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
-  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>
+  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>,
+  renderOriginOverride?: string | null
 ) {
   const browser = await puppeteer.launch({
     args: [
@@ -333,13 +351,14 @@ async function renderCoverLetterPdf(
 
   try {
     const page = await browser.newPage();
-    const renderUrl = buildRenderUrl(coverLetterRequest, adminDocument);
+    const renderUrl = buildRenderUrl(coverLetterRequest, adminDocument, renderOriginOverride);
 
-    await page.goto(renderUrl, { waitUntil: 'networkidle0' });
+    await gotoRenderUrl(page, renderUrl);
     await page.evaluateHandle('document.fonts.ready');
 
     return await page.pdf({
       format: 'Letter',
+      pageRanges: '1',
       printBackground: true,
       preferCSSPageSize: true
     });
@@ -348,11 +367,26 @@ async function renderCoverLetterPdf(
   }
 }
 
+async function gotoRenderUrl(page: Page, renderUrl: string) {
+  try {
+    await page.goto(renderUrl, { waitUntil: 'networkidle0' });
+  } catch (error) {
+    const fallbackRenderUrl = getLocalRenderUrlFallback(renderUrl);
+
+    if (!fallbackRenderUrl) {
+      throw error;
+    }
+
+    await page.goto(fallbackRenderUrl, { waitUntil: 'networkidle0' });
+  }
+}
+
 function buildRenderUrl(
   coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
-  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>
+  adminDocument: Awaited<ReturnType<typeof getAdminDocument>>,
+  renderOriginOverride?: string | null
 ) {
-  const renderOrigin = getRenderOrigin();
+  const renderOrigin = renderOriginOverride || getRenderOrigin();
 
   if (!renderOrigin) {
     throw new Error(
@@ -368,7 +402,7 @@ function buildRenderUrl(
     ...coverLetterRequest,
     hiringManager: resolvedCoverLetter.recipient.hiringManager,
     title: resolvedCoverLetter.signature.title,
-    bodyVersionSlug: resolvedCoverLetter.bodyVersion.slug
+    versionId: resolvedCoverLetter.bodyVersion.id
   }).toString();
   renderUrl.searchParams.set('adminDocument', adminDocumentJson);
 
@@ -385,6 +419,32 @@ function getRenderOrigin() {
   }
 
   return null;
+}
+
+function getLocalRenderUrlFallback(renderUrl: string) {
+  const url = new URL(renderUrl);
+
+  if (url.hostname === '127.0.0.1') {
+    url.hostname = 'localhost';
+    return url.toString();
+  }
+
+  if (url.hostname === 'localhost') {
+    url.hostname = '127.0.0.1';
+    return url.toString();
+  }
+
+  return null;
+}
+
+function getRequestedRenderOrigin(request: express.Request) {
+  const requestedRenderOrigin = request.header('x-coverfire-render-origin');
+
+  if (!requestedRenderOrigin) {
+    return null;
+  }
+
+  return isAllowedDevelopmentOrigin(requestedRenderOrigin) ? requestedRenderOrigin : null;
 }
 
 function ensureApiKeyConfiguration() {
@@ -406,6 +466,16 @@ function isAuthorizedRequest(requestApiKey: string | undefined) {
   }
 
   return crypto.timingSafeEqual(expectedApiKey, providedApiKey);
+}
+
+function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+  return [
+    'avana_vana',
+    slugifyFilenamePart(coverLetterRequest.role),
+    'cover_letter',
+    slugifyFilenamePart(coverLetterRequest.company),
+    formatFilenameDate()
+  ].join('-') + '.pdf';
 }
 
 function parsePort(portValue: string | undefined) {
@@ -468,6 +538,40 @@ function getBodyVersionById(adminDocument: CoverLetterAdminDocument, bodyVersion
   }
 
   return bodyVersion;
+}
+
+function applyPreviewBodyVersion(
+  adminDocument: CoverLetterAdminDocument,
+  previewBodyVersionId: unknown,
+  previewBodyVersionInput: unknown
+) {
+  const parsedPreviewBodyVersion = adminBodyVersionInputSchema.safeParse(previewBodyVersionInput);
+
+  if (!parsedPreviewBodyVersion.success) {
+    return adminDocument;
+  }
+
+  const existingBodyVersion = typeof previewBodyVersionId === 'string'
+    ? adminDocument.bodyVersions.find(function findBodyVersion(bodyVersion) {
+        return bodyVersion.id === previewBodyVersionId;
+      })
+    : undefined;
+  const previewBodyVersion = buildBodyVersion(parsedPreviewBodyVersion.data, existingBodyVersion);
+  const hasExistingBodyVersion = adminDocument.bodyVersions.some(function someBodyVersion(bodyVersion) {
+    return bodyVersion.id === previewBodyVersion.id;
+  });
+
+  return {
+    ...adminDocument,
+    bodyVersions: hasExistingBodyVersion
+      ? adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
+          return bodyVersion.id === previewBodyVersion.id ? previewBodyVersion : bodyVersion;
+        })
+      : [
+          ...adminDocument.bodyVersions,
+          previewBodyVersion
+        ]
+  };
 }
 
 function buildUniqueSlug(adminDocument: CoverLetterAdminDocument, baseSlug: string) {

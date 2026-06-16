@@ -50,12 +50,12 @@ export default function CoverLetterPage() {
   const previewCoverLetter = getPreviewCoverLetter();
 
   return (
-    <div id="page" className="page gap-[0.25in]">
+    <div id="page" className="cover-letter-root page gap-[0.25in]">
       <main className="flex grow flex-col">
         <section id="date">
           <span><strong>{previewCoverLetter.date}</strong></span>
         </section>
-        <section id="address" className="flex grow flex-col justify-center">
+        <section id="address" className="flex grow flex-col justify-center max-h-[var(--recipient-block-max-height)]">
           <p><strong>{previewCoverLetter.recipient.hiringManager}</strong></p>
           <p>Re: {previewCoverLetter.recipient.role}</p>
           <p>{previewCoverLetter.recipient.company}</p>
