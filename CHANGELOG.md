@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-06-16
+
+### Added
+
+- Add a branded 404 page with a return-home action for unknown client-side routes
+
 ## [1.1.1] - 2026-06-16
 
 ### Added

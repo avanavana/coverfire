@@ -1,6 +1,7 @@
 import AdminPage from '@/admin/AdminPage';
 import CoverLetterPage from '@/cover-letter/CoverLetterPage';
 import LandingPage from '@/landing/LandingPage';
+import NotFoundPage from '@/landing/NotFoundPage';
 import { Toaster } from 'sonner';
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
   const isAdminPreviewRoute = pathname.startsWith('/admin/preview');
   const isAdminRoute = pathname.startsWith('/admin') && !isAdminPreviewRoute;
   const isLetterRoute = pathname === '/letter' || isAdminPreviewRoute;
+  const isHomeRoute = pathname === '/';
 
   return (
     <>
@@ -15,8 +17,10 @@ function App() {
         <AdminPage />
       ) : isLetterRoute ? (
         <CoverLetterPage />
-      ) : (
+      ) : isHomeRoute ? (
         <LandingPage />
+      ) : (
+        <NotFoundPage />
       )}
       {isAdminRoute ? <Toaster /> : null}
     </>
