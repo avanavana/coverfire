@@ -85,6 +85,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import {
+  buildCoverLetterSearchParams,
+  getCoverLetterPreviewRequest,
+  serializeCoverLetterAdminDocument,
+} from '@/cover-letter';
 
 import type { AdminBodyVersionInput } from '@/admin/api';
 import type {
@@ -995,7 +1000,7 @@ export default function AdminPage() {
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label="Preview PDF"
+                      aria-label="Preview letter"
                       disabled={isPreviewingBodyVersion}
                       onClick={function handlePreviewButtonClick() {
                         void previewBodyVersionDraft();
@@ -1599,86 +1604,63 @@ export default function AdminPage() {
   }
 
   async function previewBodyVersionDraft() {
-    if (!drawerBodyVersion) {
+    if (!adminDocument || !drawerBodyVersion) {
       return;
     }
 
-    const previewWindow = window.open('about:blank', '_blank');
+    const input = sanitizeBodyVersionDraft(drawerBodyVersion);
+    const previewAdminDocument = buildPreviewAdminDocument(
+      adminDocument,
+      input,
+      drawerBodyVersion.id,
+    );
+    const previewVersionId = drawerBodyVersion.id || 'preview-draft';
+    const previewUrl = buildLetterPreviewUrl(
+      previewAdminDocument,
+      previewVersionId,
+    );
+    const previewWindow = window.open(previewUrl, '_blank');
 
     if (!previewWindow) {
       setErrorMessage('Unable to open a preview tab.');
       return;
     }
-
-    previewWindow.document.title = 'Generating preview...';
-    previewWindow.document.body.innerHTML =
-      '<p style="font-family: sans-serif; padding: 24px;">Generating preview...</p>';
 
     setErrorMessage('');
     setIsPreviewingBodyVersion(true);
 
     try {
-      const input = sanitizeBodyVersionDraft(drawerBodyVersion);
-      const pdf = await generateAdminPdf(
-        {
-          versionId: drawerBodyVersion.id,
-          company: 'Acme',
-          hiringManager: adminDocument?.defaults.hiringManager || undefined,
-          role: 'Senior Product Designer',
-          title: adminDocument?.defaults.title || undefined,
-        },
-        {
-          previewBodyVersion: input,
-          previewBodyVersionId: drawerBodyVersion.id,
-        },
-      );
-
-      openBlobInNewTab(previewWindow, pdf.blob);
       toast('Preview opened in a new tab.', {
         icon: successToastIcon,
       });
-    } catch (error) {
-      previewWindow.document.title = 'Preview failed';
-      previewWindow.document.body.innerHTML =
-        '<p style="font-family: sans-serif; padding: 24px;">Unable to generate preview.</p>';
-      setErrorMessage(getErrorMessage(error));
     } finally {
+      previewWindow.focus();
       setIsPreviewingBodyVersion(false);
     }
   }
 
   async function previewSavedBodyVersion(bodyVersion: CoverLetterBodyVersion) {
-    const previewWindow = window.open('about:blank', '_blank');
+    if (!adminDocument) {
+      return;
+    }
+
+    const previewUrl = buildLetterPreviewUrl(adminDocument, bodyVersion.id);
+    const previewWindow = window.open(previewUrl, '_blank');
 
     if (!previewWindow) {
       setErrorMessage('Unable to open a preview tab.');
       return;
     }
 
-    previewWindow.document.title = 'Generating preview...';
-    previewWindow.document.body.innerHTML =
-      '<p style="font-family: sans-serif; padding: 24px;">Generating preview...</p>';
-
     setErrorMessage('');
 
     try {
-      const pdf = await generateAdminPdf({
-        versionId: bodyVersion.id,
-        company: 'Acme',
-        hiringManager: adminDocument?.defaults.hiringManager || undefined,
-        role: 'Senior Product Designer',
-        title: adminDocument?.defaults.title || undefined,
-      });
-
-      openBlobInNewTab(previewWindow, pdf.blob);
       toast('Preview opened in a new tab.', {
         icon: successToastIcon,
       });
-    } catch (error) {
-      previewWindow.document.title = 'Preview failed';
-      previewWindow.document.body.innerHTML =
-        '<p style="font-family: sans-serif; padding: 24px;">Unable to generate preview.</p>';
-      setErrorMessage(getErrorMessage(error));
+      previewWindow.focus();
+    } catch {
+      setErrorMessage('Unable to open a preview tab.');
     }
   }
 
@@ -2159,14 +2141,58 @@ function buildFallbackFilename(bodyVersionSlug: string) {
   return `cover-letter-${bodyVersionSlug}.pdf`;
 }
 
-function openBlobInNewTab(previewWindow: Window, blob: Blob) {
-  const objectUrl = URL.createObjectURL(blob);
+function buildLetterPreviewUrl(
+  adminDocument: CoverLetterAdminDocument,
+  versionId: string,
+) {
+  const previewRequest = getCoverLetterPreviewRequest({
+    hiringManager: adminDocument.defaults.hiringManager,
+    title: adminDocument.defaults.title,
+    versionId,
+  });
+  const searchParams = buildCoverLetterSearchParams(previewRequest);
 
-  previewWindow.location.replace(objectUrl);
-  previewWindow.focus();
-  window.setTimeout(function revokeObjectUrl() {
-    URL.revokeObjectURL(objectUrl);
-  }, 60_000);
+  searchParams.set(
+    'adminDocument',
+    serializeCoverLetterAdminDocument(adminDocument),
+  );
+
+  return `/admin/preview?${searchParams.toString()}`;
+}
+
+function buildPreviewAdminDocument(
+  adminDocument: CoverLetterAdminDocument,
+  input: AdminBodyVersionInput,
+  existingBodyVersionId?: string,
+) {
+  const now = new Date().toISOString();
+  const previewBodyVersion = {
+    id: existingBodyVersionId || 'preview-draft',
+    slug: input.slug,
+    name: input.name,
+    greeting: input.greeting,
+    body: input.body,
+    signOff: input.signOff,
+    isDefault: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const existingBodyVersion = adminDocument.bodyVersions.find(
+    function findBodyVersion(bodyVersion) {
+      return bodyVersion.id === previewBodyVersion.id;
+    },
+  );
+
+  return {
+    ...adminDocument,
+    bodyVersions: existingBodyVersion
+      ? adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
+          return bodyVersion.id === previewBodyVersion.id
+            ? previewBodyVersion
+            : bodyVersion;
+        })
+      : [ ...adminDocument.bodyVersions, previewBodyVersion ],
+  };
 }
 
 function renderTemplatePreview(value: string) {

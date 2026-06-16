@@ -20,7 +20,8 @@ import {
   type CoverLetterBodyVersion,
   buildCoverLetter,
   buildCoverLetterSearchParams,
-  parseCoverLetterRequest
+  parseCoverLetterRequest,
+  serializeCoverLetterAdminDocument,
 } from '../src/cover-letter/index.ts';
 
 const host = process.env.HOST || '0.0.0.0';
@@ -281,6 +282,11 @@ if (hasBuiltClient) {
 }
 
 app.get('/{*path}', function appRouteHandler(_request, response) {
+  if (_request.path.startsWith('/letter') && !isAuthorizedRequest(_request.header('x-coverfire-key'))) {
+    response.status(404).type('text/plain').send('Not found');
+    return;
+  }
+
   if (!hasBuiltClient) {
     response.status(503).type('text/plain').send(
       'Frontend build not found. Run `pnpm build` or set `COVERFIRE_RENDER_ORIGIN` to a running Vite app.'
@@ -353,6 +359,12 @@ async function renderCoverLetterPdf(
     const page = await browser.newPage();
     const renderUrl = buildRenderUrl(coverLetterRequest, adminDocument, renderOriginOverride);
 
+    if (apiKey) {
+      await page.setExtraHTTPHeaders({
+        'x-coverfire-key': apiKey
+      });
+    }
+
     await gotoRenderUrl(page, renderUrl);
     await page.evaluateHandle('document.fonts.ready');
 
@@ -394,9 +406,9 @@ function buildRenderUrl(
     );
   }
 
-  const renderUrl = new URL('/', renderOrigin);
+  const renderUrl = new URL('/letter', renderOrigin);
   const resolvedCoverLetter = buildCoverLetter(coverLetterRequest, adminDocument);
-  const adminDocumentJson = JSON.stringify(adminDocument);
+  const adminDocumentJson = serializeCoverLetterAdminDocument(adminDocument);
 
   renderUrl.search = buildCoverLetterSearchParams({
     ...coverLetterRequest,

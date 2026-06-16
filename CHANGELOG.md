@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-06-16
+
+### Added
+
+- Add a public Coverfire landing page at `/` with a dashboard entry point
+- Add a protected `/letter` HTML route for internal cover letter rendering
+
+### Changed
+
+- Update admin preview to open the live HTML letter view instead of generating a preview PDF blob
+
+### Fixed
+
+- Reuse the existing API key for internal Puppeteer letter rendering so the raw letter route is not publicly viewable
+
 ## [1.0.4] - 2026-06-16
 
 ### Fixed

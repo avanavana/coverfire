@@ -1,13 +1,23 @@
 import AdminPage from '@/admin/AdminPage';
 import CoverLetterPage from '@/cover-letter/CoverLetterPage';
+import LandingPage from '@/landing/LandingPage';
 import { Toaster } from 'sonner';
 
 function App() {
-  const isAdminRoute = window.location.pathname.startsWith('/admin');
+  const pathname = window.location.pathname;
+  const isAdminPreviewRoute = pathname.startsWith('/admin/preview');
+  const isAdminRoute = pathname.startsWith('/admin') && !isAdminPreviewRoute;
+  const isLetterRoute = pathname === '/letter' || isAdminPreviewRoute;
 
   return (
     <>
-      {isAdminRoute ? <AdminPage /> : <CoverLetterPage />}
+      {isAdminRoute ? (
+        <AdminPage />
+      ) : isLetterRoute ? (
+        <CoverLetterPage />
+      ) : (
+        <LandingPage />
+      )}
       {isAdminRoute ? <Toaster /> : null}
     </>
   );
