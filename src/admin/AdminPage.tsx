@@ -656,9 +656,12 @@ export default function AdminPage() {
           </Alert>
         ) : null}
 
-        <TabsContent value="dashboard" className="mt-0 flex-1">
+        <TabsContent
+          value="dashboard"
+          className="mt-0 flex flex-1 flex-col xl:min-h-0"
+        >
           <div className="grid flex-1 gap-6 pb-6 xl:min-h-0 xl:grid-cols-[minmax(0,1.35fr)_24rem]">
-          <Card className="shadow-sm xl:min-h-0">
+          <Card className="flex flex-col shadow-sm xl:min-h-0">
             <CardHeader>
               <CardTitle>Body Versions</CardTitle>
               <CardDescription>
