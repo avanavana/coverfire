@@ -3,7 +3,10 @@ import { z } from 'zod';
 import {
   coverLetterAdminDocumentSchema,
   coverLetterRequestSchema,
+  normalizeCoverLetterAdminDocument,
 } from '../cover-letter/index.ts';
+
+export const coverLetterGenerationLogSchemaVersion = 2;
 
 export const coverLetterGenerationMethodKinds = [
   'api',
@@ -25,10 +28,11 @@ export interface CoverLetterGenerationLogRequest {
   role: string;
   salutation?: string;
   title: string;
-  versionId: string;
+  templateId: string;
 }
 
 export interface CoverLetterGenerationLogEntry {
+  schemaVersion: typeof coverLetterGenerationLogSchemaVersion;
   id: string;
   createdAt: string;
   filename: string;
@@ -39,8 +43,8 @@ export interface CoverLetterGenerationLogEntry {
 
 export interface CoverLetterGenerationLogSummary {
   id: string;
-  bodyVersionId: string;
-  bodyVersionName: string;
+  bodyTemplateId: string;
+  bodyTemplateName: string;
   company: string;
   createdAt: string;
   filename: string;
@@ -60,7 +64,7 @@ export const coverLetterGenerationLogRequestSchema: z.ZodType<CoverLetterGenerat
   coverLetterRequestSchema.extend({
     hiringManager: z.string().trim().min(1),
     title: z.string().trim().min(1),
-    versionId: z.string().trim().min(1),
+    templateId: z.string().trim().min(1),
   });
 
 export const coverLetterGenerationLogEntrySchema: z.ZodType<CoverLetterGenerationLogEntry> =
@@ -71,16 +75,13 @@ export const coverLetterGenerationLogEntrySchema: z.ZodType<CoverLetterGeneratio
     id: z.string().trim().min(1),
     method: coverLetterGenerationMethodSchema,
     request: coverLetterGenerationLogRequestSchema,
+    schemaVersion: z.literal(coverLetterGenerationLogSchemaVersion),
   });
-
-export const coverLetterGenerationLogEntriesSchema = z.array(
-  coverLetterGenerationLogEntrySchema,
-);
 
 export const coverLetterGenerationLogSummarySchema: z.ZodType<CoverLetterGenerationLogSummary> =
   z.object({
-    bodyVersionId: z.string().trim().min(1),
-    bodyVersionName: z.string().trim().min(1),
+    bodyTemplateId: z.string().trim().min(1),
+    bodyTemplateName: z.string().trim().min(1),
     company: z.string().trim().min(1),
     createdAt: z.string().trim().min(1),
     filename: z.string().trim().min(1),
@@ -94,15 +95,15 @@ export const coverLetterGenerationLogSummarySchema: z.ZodType<CoverLetterGenerat
 export function buildCoverLetterGenerationLogSummary(
   entry: CoverLetterGenerationLogEntry,
 ): CoverLetterGenerationLogSummary {
-  const bodyVersion = entry.adminDocument.bodyVersions.find(
-    function findBodyVersion(bodyVersionCandidate) {
-      return bodyVersionCandidate.id === entry.request.versionId;
+  const bodyTemplate = entry.adminDocument.bodyTemplates.find(
+    function findBodyTemplate(bodyTemplateCandidate) {
+      return bodyTemplateCandidate.id === entry.request.templateId;
     },
   );
 
   return {
-    bodyVersionId: entry.request.versionId,
-    bodyVersionName: bodyVersion?.name || entry.request.versionId,
+    bodyTemplateId: entry.request.templateId,
+    bodyTemplateName: bodyTemplate?.name || entry.request.templateId,
     company: entry.request.company,
     createdAt: entry.createdAt,
     filename: entry.filename,
@@ -112,6 +113,44 @@ export function buildCoverLetterGenerationLogSummary(
     role: entry.request.role,
     title: entry.request.title,
   };
+}
+
+export function normalizeCoverLetterGenerationLogEntry(
+  input: unknown,
+): CoverLetterGenerationLogEntry {
+  const rawInput = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  const rawRequest = rawInput.request && typeof rawInput.request === 'object' && !Array.isArray(rawInput.request)
+    ? rawInput.request as Record<string, unknown>
+    : {};
+  const rawTemplateId =
+    typeof rawRequest.templateId === 'string'
+      ? rawRequest.templateId
+      : typeof rawRequest.versionId === 'string'
+        ? rawRequest.versionId
+        : undefined;
+  const normalizedEntry = {
+    ...rawInput,
+    adminDocument: normalizeCoverLetterAdminDocument(rawInput.adminDocument),
+    request: {
+      ...rawRequest,
+      templateId: rawTemplateId,
+    },
+    schemaVersion: coverLetterGenerationLogSchemaVersion,
+  };
+
+  return coverLetterGenerationLogEntrySchema.parse(normalizedEntry);
+}
+
+export function normalizeCoverLetterGenerationLogEntries(
+  input: unknown,
+): CoverLetterGenerationLogEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input.map(normalizeCoverLetterGenerationLogEntry);
 }
 
 export function formatCoverLetterGenerationMethodLabel(

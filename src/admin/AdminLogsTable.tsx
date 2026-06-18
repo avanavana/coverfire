@@ -137,18 +137,18 @@ export function AdminLogsTable({
       id: 'select',
     },
     {
-      accessorKey: 'bodyVersionName',
-      cell: function renderBodyVersionCell({ row }) {
+      accessorKey: 'bodyTemplateName',
+      cell: function renderBodyTemplateCell({ row }) {
         return (
           <div className="flex flex-col gap-1">
-            <span className="font-medium">{row.original.bodyVersionName}</span>
+            <span className="font-medium">{row.original.bodyTemplateName}</span>
             <span className="text-xs text-muted-foreground">
               {row.original.filename}
             </span>
           </div>
         );
       },
-      header: function renderBodyVersionHeader({ column }) {
+      header: function renderBodyTemplateHeader({ column }) {
         return (
           <DataTableColumnHeader column={column} title="Body template" />
         );
@@ -283,7 +283,7 @@ export function AdminLogsTable({
       }
 
       return [
-        row.original.bodyVersionName,
+        row.original.bodyTemplateName,
         row.original.company,
         row.original.filename,
         row.original.hiringManager,
@@ -649,7 +649,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
 function getColumnLabel(columnId: string) {
   switch (columnId) {
-    case 'bodyVersionName':
+    case 'bodyTemplateName':
       return 'Body template';
     case 'createdAt':
       return 'Created';

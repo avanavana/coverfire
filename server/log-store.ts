@@ -7,8 +7,8 @@ import { Redis } from '@upstash/redis';
 
 import {
   buildCoverLetterGenerationLogSummary,
-  coverLetterGenerationLogEntriesSchema,
   coverLetterGenerationLogEntrySchema,
+  normalizeCoverLetterGenerationLogEntries,
   type CoverLetterGenerationLogEntry,
 } from '../src/admin/generation-logs.ts';
 
@@ -85,7 +85,7 @@ async function loadLocalGenerationLogEntries() {
     const fileContents = await fs.readFile(localLogStorePath, 'utf8');
 
     localGenerationLogEntries = sortCoverLetterGenerationLogEntries(
-      coverLetterGenerationLogEntriesSchema.parse(JSON.parse(fileContents)),
+      normalizeCoverLetterGenerationLogEntries(JSON.parse(fileContents)),
     );
   } catch (error) {
     if (isMissingFileError(error)) {
@@ -103,7 +103,7 @@ async function readStoredGenerationLogEntries() {
   );
 
   return sortCoverLetterGenerationLogEntries(
-    coverLetterGenerationLogEntriesSchema.parse(storedEntries || []),
+    normalizeCoverLetterGenerationLogEntries(storedEntries || []),
   );
 }
 

@@ -35,10 +35,10 @@ import {
   serializeCoverLetterAdminDocument,
 } from '@/cover-letter';
 
-import type { AdminBodyVersionInput } from '@/admin/api';
+import type { AdminBodyTemplateInput } from '@/admin/api';
 import type {
   CoverLetterAdminDocument,
-  CoverLetterBodyVersion,
+  CoverLetterBodyTemplate,
   CoverLetterContactMethod,
   CoverLetterRequest,
 } from '@/cover-letter';
@@ -54,7 +54,7 @@ interface PreviewGenerateFormState {
   role: string;
   salutation: string;
   title: string;
-  versionId: string;
+  templateId: string;
 }
 
 const footerIconByKey = {
@@ -129,9 +129,9 @@ export default function CoverLetterPage() {
       );
     });
   const adminDocument = initialPreviewContext.adminDocument;
-  const selectedBodyVersion =
-    getBodyVersionById(adminDocument, previewGenerateForm.versionId) ||
-    getDefaultBodyVersion(adminDocument);
+  const selectedBodyTemplate =
+    getBodyTemplateById(adminDocument, previewGenerateForm.templateId) ||
+    getDefaultBodyTemplate(adminDocument);
   const resolvedPreviewRequest = buildPreviewRequest(
     previewGenerateForm,
     adminDocument,
@@ -198,15 +198,15 @@ export default function CoverLetterPage() {
     try {
       const pdf = await generateAdminPdf(resolvedPreviewRequest, {
         method: 'admin-preview',
-        previewBodyVersion: selectedBodyVersion
-          ? getPreviewBodyVersionInput(selectedBodyVersion)
+        previewBodyTemplate: selectedBodyTemplate
+          ? getPreviewBodyTemplateInput(selectedBodyTemplate)
           : undefined,
-        previewBodyVersionId: selectedBodyVersion?.id,
+        previewBodyTemplateId: selectedBodyTemplate?.id,
       });
 
       downloadBlob(
         pdf.blob,
-        pdf.filename || buildFallbackFilename(selectedBodyVersion?.slug),
+        pdf.filename || buildFallbackFilename(selectedBodyTemplate?.slug),
       );
       toast(`Generated ${pdf.filename || 'cover letter PDF'}.`, {
         icon: successToastIcon,
@@ -328,9 +328,9 @@ export default function CoverLetterPage() {
                 >
                   <LabeledField label="Body Template">
                     <Select
-                      value={selectedBodyVersion.id}
-                      onValueChange={function handleBodyVersionChange(value) {
-                        updatePreviewGenerateFormField('versionId', value);
+                      value={selectedBodyTemplate.id}
+                      onValueChange={function handleBodyTemplateChange(value) {
+                        updatePreviewGenerateFormField('templateId', value);
                       }}
                     >
                       <SelectTrigger data-vaul-no-drag className="w-full">
@@ -338,15 +338,15 @@ export default function CoverLetterPage() {
                       </SelectTrigger>
                       <SelectContent position="item-aligned">
                         <SelectGroup>
-                          {adminDocument.bodyVersions.map(function mapBodyVersion(
-                            bodyVersion,
+                          {adminDocument.bodyTemplates.map(function mapBodyTemplate(
+                            bodyTemplate,
                           ) {
                             return (
                               <SelectItem
-                                key={bodyVersion.id}
-                                value={bodyVersion.id}
+                                key={bodyTemplate.id}
+                                value={bodyTemplate.id}
                               >
-                                {bodyVersion.name}
+                                {bodyTemplate.name}
                               </SelectItem>
                             );
                           })}
@@ -608,9 +608,9 @@ function createPreviewGenerateFormState(
   adminDocument: CoverLetterAdminDocument,
   previewRequest: CoverLetterRequest,
 ): PreviewGenerateFormState {
-  const selectedBodyVersion =
-    getBodyVersionById(adminDocument, previewRequest.versionId) ||
-    getDefaultBodyVersion(adminDocument);
+  const selectedBodyTemplate =
+    getBodyTemplateById(adminDocument, previewRequest.templateId) ||
+    getDefaultBodyTemplate(adminDocument);
   const hiringManager =
     previewRequest.hiringManager || adminDocument.defaults.hiringManager;
   const title = previewRequest.title || adminDocument.defaults.title;
@@ -628,7 +628,7 @@ function createPreviewGenerateFormState(
         ? buildDefaultSalutation(hiringManager)
         : ''),
     title,
-    versionId: selectedBodyVersion.id,
+    templateId: selectedBodyTemplate.id,
   };
 }
 
@@ -647,31 +647,31 @@ function buildPreviewRequest(
       ? previewGenerateForm.salutation || undefined
       : undefined,
     title: previewGenerateForm.title || undefined,
-    versionId: previewGenerateForm.versionId,
+    templateId: previewGenerateForm.templateId,
   };
 }
 
-function getBodyVersionById(
+function getBodyTemplateById(
   adminDocument: CoverLetterAdminDocument,
-  bodyVersionId?: string,
+  bodyTemplateId?: string,
 ) {
-  if (!bodyVersionId) {
+  if (!bodyTemplateId) {
     return null;
   }
 
   return (
-    adminDocument.bodyVersions.find(function findBodyVersion(bodyVersion) {
-      return bodyVersion.id === bodyVersionId;
+    adminDocument.bodyTemplates.find(function findBodyTemplate(bodyTemplate) {
+      return bodyTemplate.id === bodyTemplateId;
     }) || null
   );
 }
 
-function getDefaultBodyVersion(adminDocument: CoverLetterAdminDocument) {
+function getDefaultBodyTemplate(adminDocument: CoverLetterAdminDocument) {
   return (
-    getBodyVersionById(
+    getBodyTemplateById(
       adminDocument,
-      adminDocument.defaults.defaultBodyVersionId,
-    ) || adminDocument.bodyVersions[0]
+      adminDocument.defaults.defaultBodyTemplateId,
+    ) || adminDocument.bodyTemplates[0]
   );
 }
 
@@ -719,20 +719,20 @@ function syncPreviewSalutation(
   return currentSalutation;
 }
 
-function getPreviewBodyVersionInput(
-  bodyVersion: CoverLetterBodyVersion,
-): AdminBodyVersionInput {
+function getPreviewBodyTemplateInput(
+  bodyTemplate: CoverLetterBodyTemplate,
+): AdminBodyTemplateInput {
   return {
-    body: bodyVersion.body,
-    greeting: bodyVersion.greeting,
-    name: bodyVersion.name,
-    signOff: bodyVersion.signOff,
-    slug: bodyVersion.slug,
+    body: bodyTemplate.body,
+    greeting: bodyTemplate.greeting,
+    name: bodyTemplate.name,
+    signOff: bodyTemplate.signOff,
+    slug: bodyTemplate.slug,
   };
 }
 
-function buildFallbackFilename(bodyVersionSlug?: string) {
-  return `cover-letter-${bodyVersionSlug || 'preview'}.pdf`;
+function buildFallbackFilename(bodyTemplateSlug?: string) {
+  return `cover-letter-${bodyTemplateSlug || 'preview'}.pdf`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {

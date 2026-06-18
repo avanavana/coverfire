@@ -12,7 +12,7 @@ import {
   createDefaultCoverLetterAdminDocument,
   normalizeCoverLetterAdminDocument,
   type CoverLetterAdminDocument,
-  type CoverLetterBodyVersion
+  type CoverLetterBodyTemplate
 } from '../src/cover-letter/index.ts';
 
 const ADMIN_DOCUMENT_KEY = 'coverfire:admin';
@@ -29,7 +29,7 @@ let localAdminDocument = createDefaultCoverLetterAdminDocument();
 
 export const adminDocumentSchema = coverLetterAdminDocumentSchema;
 
-export const adminBodyVersionInputSchema = z.object({
+export const adminBodyTemplateInputSchema = z.object({
   name: z.string().trim().min(1),
   slug: z.string().trim().min(1),
   greeting: z.string().trim().min(1),
@@ -55,7 +55,7 @@ export async function getAdminDocument() {
   return normalizeCoverLetterAdminDocument(storedDocument);
 }
 
-export async function saveAdminDocument(adminDocument: CoverLetterAdminDocument) {
+export async function saveAdminDocument(adminDocument: unknown) {
   const parsedDocument = adminDocumentSchema.parse(
     normalizeCoverLetterAdminDocument(adminDocument)
   );
@@ -72,18 +72,18 @@ export async function saveAdminDocument(adminDocument: CoverLetterAdminDocument)
   return parsedDocument;
 }
 
-export function buildBodyVersion(input: z.infer<typeof adminBodyVersionInputSchema>, existingBodyVersion?: CoverLetterBodyVersion): CoverLetterBodyVersion {
+export function buildBodyTemplate(input: z.infer<typeof adminBodyTemplateInputSchema>, existingBodyTemplate?: CoverLetterBodyTemplate): CoverLetterBodyTemplate {
   const timestamp = new Date().toISOString();
 
   return {
-    id: existingBodyVersion?.id || crypto.randomUUID(),
+    id: existingBodyTemplate?.id || crypto.randomUUID(),
     slug: input.slug,
     name: input.name,
     greeting: input.greeting,
     body: input.body,
     signOff: input.signOff,
-    isDefault: existingBodyVersion?.isDefault || false,
-    createdAt: existingBodyVersion?.createdAt || timestamp,
+    isDefault: existingBodyTemplate?.isDefault || false,
+    createdAt: existingBodyTemplate?.createdAt || timestamp,
     updatedAt: timestamp
   };
 }

@@ -1,6 +1,6 @@
 import type {
   CoverLetterAdminDocument,
-  CoverLetterBodyVersion,
+  CoverLetterBodyTemplate,
   CoverLetterRequest,
 } from '@/cover-letter';
 import type {
@@ -8,7 +8,7 @@ import type {
   CoverLetterGenerationLogSummary,
 } from '@/admin/generation-logs';
 
-export interface AdminBodyVersionInput {
+export interface AdminBodyTemplateInput {
   name: string;
   slug: string;
   greeting: string;
@@ -18,8 +18,8 @@ export interface AdminBodyVersionInput {
 
 interface GenerateAdminPdfOptions {
   method?: 'admin-preview' | 'admin-ui';
-  previewBodyVersion?: AdminBodyVersionInput;
-  previewBodyVersionId?: string;
+  previewBodyTemplate?: AdminBodyTemplateInput;
+  previewBodyTemplateId?: string;
 }
 
 interface ApiErrorDetail {
@@ -67,34 +67,34 @@ export async function saveAdminDocument(adminDocument: CoverLetterAdminDocument)
   });
 }
 
-export async function createBodyVersion(input: AdminBodyVersionInput) {
-  return request<CoverLetterBodyVersion>('/api/admin/body', {
+export async function createBodyTemplate(input: AdminBodyTemplateInput) {
+  return request<CoverLetterBodyTemplate>('/api/admin/templates', {
     body: JSON.stringify(input),
     method: 'POST'
   });
 }
 
-export async function updateBodyVersion(id: string, input: AdminBodyVersionInput) {
-  return request<CoverLetterBodyVersion>(`/api/admin/body/${id}`, {
+export async function updateBodyTemplate(id: string, input: AdminBodyTemplateInput) {
+  return request<CoverLetterBodyTemplate>(`/api/admin/templates/${id}`, {
     body: JSON.stringify(input),
     method: 'PUT'
   });
 }
 
-export async function duplicateBodyVersion(id: string) {
-  return request<CoverLetterBodyVersion>(`/api/admin/body/${id}/duplicate`, {
+export async function duplicateBodyTemplate(id: string) {
+  return request<CoverLetterBodyTemplate>(`/api/admin/templates/${id}/duplicate`, {
     method: 'POST'
   });
 }
 
-export async function deleteBodyVersion(id: string) {
-  await request<void>(`/api/admin/body/${id}`, {
+export async function deleteBodyTemplate(id: string) {
+  await request<void>(`/api/admin/templates/${id}`, {
     method: 'DELETE'
   });
 }
 
-export async function setDefaultBodyVersion(id: string) {
-  return request<CoverLetterBodyVersion>(`/api/admin/body/${id}/default`, {
+export async function setDefaultBodyTemplate(id: string) {
+  return request<CoverLetterBodyTemplate>(`/api/admin/templates/${id}/default`, {
     method: 'POST'
   });
 }
@@ -103,8 +103,8 @@ export async function generateAdminPdf(requestBody: CoverLetterRequest, options:
   const response = await fetchWithRetry(buildApiUrl('/api/admin/generate'), {
     body: JSON.stringify({
       ...requestBody,
-      previewBodyVersion: options.previewBodyVersion,
-      previewBodyVersionId: options.previewBodyVersionId
+      previewBodyTemplate: options.previewBodyTemplate,
+      previewBodyTemplateId: options.previewBodyTemplateId
     }),
     headers: {
       'Content-Type': 'application/json',

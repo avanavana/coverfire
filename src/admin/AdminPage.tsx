@@ -30,15 +30,15 @@ import { AdminLogsTable } from '@/admin/AdminLogsTable';
 import { BodyEditor } from '@/admin/rich-text';
 import {
   AdminApiError,
-  createBodyVersion,
-  deleteBodyVersion,
-  duplicateBodyVersion,
+  createBodyTemplate,
+  deleteBodyTemplate,
+  duplicateBodyTemplate,
   fetchAdminDocument,
   fetchCoverLetterGenerationLogs,
   generateAdminPdf,
   saveAdminDocument,
-  setDefaultBodyVersion,
-  updateBodyVersion,
+  setDefaultBodyTemplate,
+  updateBodyTemplate,
 } from '@/admin/api';
 import { buildCoverLetterPreviewUrl } from '@/admin/preview-url';
 import { type CoverLetterGenerationLogSummary } from '@/admin/generation-logs';
@@ -98,14 +98,14 @@ import {
 import { cn } from '@/lib/utils';
 import { getCoverLetterGenerationValidationMessage } from '@/cover-letter';
 
-import type { AdminBodyVersionInput } from '@/admin/api';
+import type { AdminBodyTemplateInput } from '@/admin/api';
 import type {
   CoverLetterAdminDocument,
-  CoverLetterBodyVersion,
+  CoverLetterBodyTemplate,
   CoverLetterContactMethod,
 } from '@/cover-letter';
 
-interface BodyVersionDraft extends AdminBodyVersionInput {
+interface BodyTemplateDraft extends AdminBodyTemplateInput {
   id?: string;
 }
 
@@ -152,12 +152,12 @@ export default function AdminPage() {
   const [adminDocument, setAdminDocument] =
     useState<CoverLetterAdminDocument | null>(null);
   const [persistedDocumentJson, setPersistedDocumentJson] = useState('');
-  const [selectedBodyVersionId, setSelectedBodyVersionId] = useState('');
-  const [drawerBodyVersion, setDrawerBodyVersion] =
-    useState<BodyVersionDraft | null>(null);
-  const [pendingDeleteBodyVersionId, setPendingDeleteBodyVersionId] =
+  const [selectedBodyTemplateId, setSelectedBodyTemplateId] = useState('');
+  const [drawerBodyTemplate, setDrawerBodyTemplate] =
+    useState<BodyTemplateDraft | null>(null);
+  const [pendingDeleteBodyTemplateId, setPendingDeleteBodyTemplateId] =
     useState('');
-  const [bodyVersionPreviewUrl, setBodyVersionPreviewUrl] = useState('');
+  const [bodyTemplatePreviewUrl, setBodyTemplatePreviewUrl] = useState('');
   const [generationLogs, setGenerationLogs] = useState<
     CoverLetterGenerationLogSummary[]
   >([]);
@@ -171,7 +171,7 @@ export default function AdminPage() {
   const [isLoadingGenerationLogs, setIsLoadingGenerationLogs] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetryingAdminDocument, setIsRetryingAdminDocument] = useState(false);
-  const [isSavingBodyVersion, setIsSavingBodyVersion] = useState(false);
+  const [isSavingBodyTemplate, setIsSavingBodyTemplate] = useState(false);
   const [isSavingSignatureFields, setIsSavingSignatureFields] = useState(false);
   const [connectionWarning, setConnectionWarning] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -184,7 +184,7 @@ export default function AdminPage() {
   const signOffInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
   const latestAdminDocumentRef = useRef<CoverLetterAdminDocument | null>(null);
-  const latestDrawerBodyVersionRef = useRef<BodyVersionDraft | null>(null);
+  const latestDrawerBodyTemplateRef = useRef<BodyTemplateDraft | null>(null);
   const latestPersistedDocumentJsonRef = useRef('');
 
   const canRefreshAdminDocumentInPlace = useCallback(
@@ -195,7 +195,7 @@ export default function AdminPage() {
         return true;
       }
 
-      if (latestDrawerBodyVersionRef.current) {
+      if (latestDrawerBodyTemplateRef.current) {
         return false;
       }
 
@@ -216,16 +216,16 @@ export default function AdminPage() {
         setAdminDocument,
         setPersistedDocumentJson,
       );
-      setSelectedBodyVersionId(
-        function updateSelectedBodyVersionId(currentSelectedBodyVersionId) {
+      setSelectedBodyTemplateId(
+        function updateSelectedBodyTemplateId(currentSelectedBodyTemplateId) {
           if (
-            currentSelectedBodyVersionId &&
-            getBodyVersionById(nextAdminDocument, currentSelectedBodyVersionId)
+            currentSelectedBodyTemplateId &&
+            getBodyTemplateById(nextAdminDocument, currentSelectedBodyTemplateId)
           ) {
-            return currentSelectedBodyVersionId;
+            return currentSelectedBodyTemplateId;
           }
 
-          return nextAdminDocument.defaults.defaultBodyVersionId;
+          return nextAdminDocument.defaults.defaultBodyTemplateId;
         },
       );
       setGenerateForm(function updateCurrentGenerateForm(currentGenerateForm) {
@@ -347,19 +347,19 @@ export default function AdminPage() {
   );
 
   useEffect(
-    function syncLatestDrawerBodyVersionRef() {
-      latestDrawerBodyVersionRef.current = drawerBodyVersion;
+    function syncLatestDrawerBodyTemplateRef() {
+      latestDrawerBodyTemplateRef.current = drawerBodyTemplate;
     },
-    [drawerBodyVersion],
+    [drawerBodyTemplate],
   );
 
-  useEffect(function closeBodyVersionPreviewFromFrame() {
+  useEffect(function closeBodyTemplatePreviewFromFrame() {
     function handlePreviewMessage(event: MessageEvent) {
       if (
         event.origin === window.location.origin
         && event.data === 'coverfire:close-preview'
       ) {
-        setBodyVersionPreviewUrl('');
+        setBodyTemplatePreviewUrl('');
         void loadGenerationLogs();
       }
     }
@@ -515,15 +515,15 @@ export default function AdminPage() {
     );
   }
 
-  const selectedBodyVersion =
-    getBodyVersionById(adminDocument, selectedBodyVersionId) ||
-    getDefaultBodyVersion(adminDocument);
-  const pendingDeleteBodyVersion = pendingDeleteBodyVersionId
-    ? getBodyVersionById(adminDocument, pendingDeleteBodyVersionId)
+  const selectedBodyTemplate =
+    getBodyTemplateById(adminDocument, selectedBodyTemplateId) ||
+    getDefaultBodyTemplate(adminDocument);
+  const pendingDeleteBodyTemplate = pendingDeleteBodyTemplateId
+    ? getBodyTemplateById(adminDocument, pendingDeleteBodyTemplateId)
     : null;
   const persistedDocument = parsePersistedDocument(persistedDocumentJson);
   const canReloadLatestAdminState =
-    !drawerBodyVersion &&
+    !drawerBodyTemplate &&
     JSON.stringify(adminDocument) === persistedDocumentJson;
   const hasUnsavedSignatureFields =
     JSON.stringify({
@@ -536,7 +536,7 @@ export default function AdminPage() {
       contacts: persistedDocument?.profile.contacts,
       title: persistedDocument?.defaults.title,
     });
-  const usedDrawerTokens = getUsedDrawerTokens(drawerBodyVersion);
+  const usedDrawerTokens = getUsedDrawerTokens(drawerBodyTemplate);
   return (
     <div className="min-h-screen bg-muted/30">
       <Tabs
@@ -670,10 +670,10 @@ export default function AdminPage() {
               <CardAction>
                 <Button
                   variant="outline"
-                  onClick={function handleCreateBodyVersion() {
+                  onClick={function handleCreateBodyTemplate() {
                     setErrorMessage('');
-                    setDrawerBodyVersion(
-                      createNewBodyVersionDraft(adminDocument),
+                    setDrawerBodyTemplate(
+                      createNewBodyTemplateDraft(adminDocument),
                     );
                     setIsDrawerOpen(true);
                   }}
@@ -685,16 +685,16 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
               <div className="grid gap-4 py-1 md:grid-cols-2">
-                {adminDocument.bodyVersions.map(
-                  function renderBodyVersion(bodyVersion) {
+                {adminDocument.bodyTemplates.map(
+                  function renderBodyTemplate(bodyTemplate) {
                     const isDefault =
-                      bodyVersion.id ===
-                      adminDocument.defaults.defaultBodyVersionId;
-                    const isSelected = bodyVersion.id === selectedBodyVersionId;
+                      bodyTemplate.id ===
+                      adminDocument.defaults.defaultBodyTemplateId;
+                    const isSelected = bodyTemplate.id === selectedBodyTemplateId;
 
                     return (
                       <Card
-                        key={bodyVersion.id}
+                        key={bodyTemplate.id}
                         role="button"
                         tabIndex={0}
                         aria-pressed={isSelected}
@@ -702,13 +702,13 @@ export default function AdminPage() {
                           'cursor-pointer transition-colors hover:bg-muted/30',
                           isSelected && 'ring-2 ring-primary shadow-md',
                         )}
-                        onClick={function handleSelectBodyVersion() {
-                          setSelectedBodyVersionId(bodyVersion.id);
+                        onClick={function handleSelectBodyTemplate() {
+                          setSelectedBodyTemplateId(bodyTemplate.id);
                         }}
-                        onKeyDown={function handleBodyVersionKeyDown(event) {
+                        onKeyDown={function handleBodyTemplateKeyDown(event) {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
-                            setSelectedBodyVersionId(bodyVersion.id);
+                            setSelectedBodyTemplateId(bodyTemplate.id);
                           }
                         }}
                       >
@@ -716,10 +716,10 @@ export default function AdminPage() {
                           <div className="flex items-center gap-3">
                             <div className="flex size-9 items-center justify-center rounded-lg border bg-muted">
                               <Checkbox
-                                aria-label={`Select ${bodyVersion.name}`}
+                                aria-label={`Select ${bodyTemplate.name}`}
                                 checked={isSelected}
                                 onCheckedChange={function handleCheckedChange() {
-                                  setSelectedBodyVersionId(bodyVersion.id);
+                                  setSelectedBodyTemplateId(bodyTemplate.id);
                                 }}
                                 onClick={function handleCheckboxClick(event) {
                                   event.stopPropagation();
@@ -732,16 +732,16 @@ export default function AdminPage() {
                               />
                             </div>
                             <div className="grid gap-1">
-                              <CardTitle>{bodyVersion.name}</CardTitle>
+                              <CardTitle>{bodyTemplate.name}</CardTitle>
                               <CardDescription>
-                                <InlineCode>{bodyVersion.slug}</InlineCode>
+                                <InlineCode>{bodyTemplate.slug}</InlineCode>
                               </CardDescription>
                             </div>
                           </div>
                           <CardAction className="flex items-center gap-2">
                             <DropdownMenu>
                               <DropdownMenuTrigger
-                                aria-label={`Manage ${bodyVersion.name}`}
+                                aria-label={`Manage ${bodyTemplate.name}`}
                                 className={cn(
                                   buttonVariants({
                                     size: 'icon',
@@ -757,12 +757,12 @@ export default function AdminPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem
-                                  onClick={function handleEditBodyVersion(
+                                  onClick={function handleEditBodyTemplate(
                                     event,
                                   ) {
                                     event.stopPropagation();
-                                    setDrawerBodyVersion(
-                                      createDraftFromBodyVersion(bodyVersion),
+                                    setDrawerBodyTemplate(
+                                      createDraftFromBodyTemplate(bodyTemplate),
                                     );
                                     setIsDrawerOpen(true);
                                   }}
@@ -771,24 +771,24 @@ export default function AdminPage() {
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={function handlePreviewBodyVersionClick(
+                                  onClick={function handlePreviewBodyTemplateClick(
                                     event,
                                   ) {
                                     event.stopPropagation();
-                                    previewSavedBodyVersion(bodyVersion);
+                                    previewSavedBodyTemplate(bodyTemplate);
                                   }}
                                 >
                                   <Eye />
                                   Preview
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={function handleDuplicateBodyVersion(
+                                  onClick={function handleDuplicateBodyTemplate(
                                     event,
                                   ) {
                                     event.stopPropagation();
                                     void handleDuplicate(
                                       adminDocument,
-                                      bodyVersion.id,
+                                      bodyTemplate.id,
                                     );
                                   }}
                                 >
@@ -803,7 +803,7 @@ export default function AdminPage() {
                                     event.stopPropagation();
                                     void handleSetDefault(
                                       adminDocument,
-                                      bodyVersion.id,
+                                      bodyTemplate.id,
                                     );
                                   }}
                                 >
@@ -815,8 +815,8 @@ export default function AdminPage() {
                                   variant="destructive"
                                   onClick={function handleDeleteClick(event) {
                                     event.stopPropagation();
-                                    setPendingDeleteBodyVersionId(
-                                      bodyVersion.id,
+                                    setPendingDeleteBodyTemplateId(
+                                      bodyTemplate.id,
                                     );
                                   }}
                                 >
@@ -829,10 +829,10 @@ export default function AdminPage() {
                         </CardHeader>
                         <CardContent className="grid gap-3">
                           <p className="text-sm text-muted-foreground">
-                            {renderTemplatePreview(bodyVersion.greeting)}
+                            {renderTemplatePreview(bodyTemplate.greeting)}
                           </p>
                           <div className="line-clamp-8 text-sm">
-                            {renderTemplatePreview(bodyVersion.body)}
+                            {renderTemplatePreview(bodyTemplate.body)}
                           </div>
                         </CardContent>
                         <CardFooter>
@@ -852,7 +852,7 @@ export default function AdminPage() {
                                 event.stopPropagation();
                                 void handleSetDefault(
                                   adminDocument,
-                                  bodyVersion.id,
+                                  bodyTemplate.id,
                                 );
                               }}
                             >
@@ -1031,8 +1031,8 @@ export default function AdminPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="logs" className="mt-0 flex-1">
-          <Card className="shadow-sm">
+        <TabsContent value="logs" className="mt-0 flex flex-1 flex-col pb-6">
+          <Card className="flex-1 shadow-sm">
             <CardHeader>
               <CardTitle>Generated PDFs</CardTitle>
               <CardDescription>
@@ -1040,7 +1040,7 @@ export default function AdminPage() {
                 letters.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
               <AdminLogsTable
                 errorMessage={generationLogsErrorMessage}
                 generationLogs={generationLogs}
@@ -1048,7 +1048,7 @@ export default function AdminPage() {
                 onGenerationLogsChanged={function handleGenerationLogsChanged() {
                   void loadGenerationLogs();
                 }}
-                onOpenPreview={setBodyVersionPreviewUrl}
+                onOpenPreview={setBodyTemplatePreviewUrl}
               />
             </CardContent>
           </Card>
@@ -1061,7 +1061,7 @@ export default function AdminPage() {
           setIsDrawerOpen(open);
 
           if (!open) {
-            setDrawerBodyVersion(null);
+            setDrawerBodyTemplate(null);
           }
         }}
       >
@@ -1072,12 +1072,12 @@ export default function AdminPage() {
             <Drawer.Description className="sr-only">
               Edit a single cover-letter body template.
             </Drawer.Description>
-            {drawerBodyVersion ? (
+            {drawerBodyTemplate ? (
               <>
                 <div className="flex items-center justify-between gap-4 p-6">
                   <div className="grid gap-1">
                     <h2 className="text-lg font-semibold">
-                      {drawerBodyVersion.id
+                      {drawerBodyTemplate.id
                         ? 'Edit body template'
                         : 'Create body template'}
                     </h2>
@@ -1090,18 +1090,18 @@ export default function AdminPage() {
                       variant="outline"
                       onClick={function handleCancelDrawerClick() {
                         setIsDrawerOpen(false);
-                        setDrawerBodyVersion(null);
+                        setDrawerBodyTemplate(null);
                       }}
                     >
                       Cancel
                     </Button>
                     <Button
-                      disabled={isSavingBodyVersion}
-                      onClick={function handleSaveBodyVersionClick() {
-                        void saveBodyVersionDraft();
+                      disabled={isSavingBodyTemplate}
+                      onClick={function handleSaveBodyTemplateClick() {
+                        void saveBodyTemplateDraft();
                       }}
                     >
-                      {isSavingBodyVersion ? (
+                      {isSavingBodyTemplate ? (
                         <LoaderCircle
                           className="animate-spin"
                           data-icon="inline-start"
@@ -1116,7 +1116,7 @@ export default function AdminPage() {
                       size="icon"
                       aria-label="Preview letter"
                       onClick={function handlePreviewButtonClick() {
-                        previewBodyVersionDraft();
+                        previewBodyTemplateDraft();
                       }}
                     >
                       <Eye />
@@ -1130,9 +1130,9 @@ export default function AdminPage() {
                         <Input
                           data-vaul-no-drag
                           id="drawer-name"
-                          value={drawerBodyVersion.name}
+                          value={drawerBodyTemplate.name}
                           onChange={function handleNameChange(event) {
-                            updateDrawerBodyVersionField(
+                            updateDrawerBodyTemplateField(
                               'name',
                               event.target.value,
                             );
@@ -1143,9 +1143,9 @@ export default function AdminPage() {
                         <Input
                           data-vaul-no-drag
                           id="drawer-slug"
-                          value={drawerBodyVersion.slug}
+                          value={drawerBodyTemplate.slug}
                           onChange={function handleSlugChange(event) {
-                            updateDrawerBodyVersionField(
+                            updateDrawerBodyTemplateField(
                               'slug',
                               slugify(event.target.value),
                             );
@@ -1190,7 +1190,7 @@ export default function AdminPage() {
                         data-vaul-no-drag
                         id="drawer-greeting"
                         ref={greetingInputRef}
-                        value={drawerBodyVersion.greeting}
+                        value={drawerBodyTemplate.greeting}
                         onFocus={function handleGreetingFocus(event) {
                           captureDrawerSelection(
                             'greeting',
@@ -1198,7 +1198,7 @@ export default function AdminPage() {
                           );
                         }}
                         onChange={function handleGreetingChange(event) {
-                          updateDrawerBodyVersionField(
+                          updateDrawerBodyTemplateField(
                             'greeting',
                             event.target.value,
                           );
@@ -1215,7 +1215,7 @@ export default function AdminPage() {
                       <Label>Body</Label>
                       <BodyEditor
                         textareaRef={bodyTextareaRef}
-                        value={drawerBodyVersion.body}
+                        value={drawerBodyTemplate.body}
                         onFocus={function handleBodyFocus() {
                           if (bodyTextareaRef.current) {
                             captureDrawerSelection(
@@ -1225,7 +1225,7 @@ export default function AdminPage() {
                           }
                         }}
                         onChange={function handleBodyChange(value) {
-                          updateDrawerBodyVersionField('body', value);
+                          updateDrawerBodyTemplateField('body', value);
                         }}
                         onSelect={function handleBodySelect(event) {
                           captureDrawerSelection('body', event.currentTarget);
@@ -1237,7 +1237,7 @@ export default function AdminPage() {
                         data-vaul-no-drag
                         id="drawer-sign-off"
                         ref={signOffInputRef}
-                        value={drawerBodyVersion.signOff}
+                        value={drawerBodyTemplate.signOff}
                         onFocus={function handleSignOffFocus(event) {
                           captureDrawerSelection(
                             'signOff',
@@ -1245,7 +1245,7 @@ export default function AdminPage() {
                           );
                         }}
                         onChange={function handleSignOffChange(event) {
-                          updateDrawerBodyVersionField(
+                          updateDrawerBodyTemplateField(
                             'signOff',
                             event.target.value,
                           );
@@ -1267,10 +1267,10 @@ export default function AdminPage() {
       </Drawer.Root>
 
       <Dialog
-        open={Boolean(bodyVersionPreviewUrl)}
+        open={Boolean(bodyTemplatePreviewUrl)}
         onOpenChange={function handlePreviewDialogOpenChange(open) {
           if (!open) {
-            setBodyVersionPreviewUrl('');
+            setBodyTemplatePreviewUrl('');
           }
         }}
       >
@@ -1284,10 +1284,10 @@ export default function AdminPage() {
               Preview the selected cover-letter body template.
             </DialogDescription>
           </DialogHeader>
-          {bodyVersionPreviewUrl ? (
+          {bodyTemplatePreviewUrl ? (
             <iframe
               className="h-full w-full border-0"
-              src={bodyVersionPreviewUrl}
+              src={bodyTemplatePreviewUrl}
               title="Body template preview"
             />
           ) : null}
@@ -1390,10 +1390,10 @@ export default function AdminPage() {
       </Dialog>
 
       <AlertDialog
-        open={Boolean(pendingDeleteBodyVersion)}
+        open={Boolean(pendingDeleteBodyTemplate)}
         onOpenChange={function handleDeleteDialogOpenChange(open) {
           if (!open) {
-            setPendingDeleteBodyVersionId('');
+            setPendingDeleteBodyTemplateId('');
           }
         }}
       >
@@ -1401,8 +1401,8 @@ export default function AdminPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete body template?</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingDeleteBodyVersion
-                ? `This will delete "${pendingDeleteBodyVersion.name}".`
+              {pendingDeleteBodyTemplate
+                ? `This will delete "${pendingDeleteBodyTemplate.name}".`
                 : 'This body template will be deleted.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1411,8 +1411,8 @@ export default function AdminPage() {
             <AlertDialogAction
               variant="destructive"
               onClick={function handleConfirmDeleteClick() {
-                if (pendingDeleteBodyVersion) {
-                  void handleDelete(adminDocument, pendingDeleteBodyVersion.id);
+                if (pendingDeleteBodyTemplate) {
+                  void handleDelete(adminDocument, pendingDeleteBodyTemplate.id);
                 }
               }}
             >
@@ -1425,18 +1425,18 @@ export default function AdminPage() {
     </div>
   );
 
-  function updateDrawerBodyVersionField<K extends keyof BodyVersionDraft>(
+  function updateDrawerBodyTemplateField<K extends keyof BodyTemplateDraft>(
     field: K,
-    value: BodyVersionDraft[K],
+    value: BodyTemplateDraft[K],
   ) {
-    setDrawerBodyVersion(
-      function updateCurrentDrawerBodyVersion(currentDrawerBodyVersion) {
-        if (!currentDrawerBodyVersion) {
-          return currentDrawerBodyVersion;
+    setDrawerBodyTemplate(
+      function updateCurrentDrawerBodyTemplate(currentDrawerBodyTemplate) {
+        if (!currentDrawerBodyTemplate) {
+          return currentDrawerBodyTemplate;
         }
 
         return {
-          ...currentDrawerBodyVersion,
+          ...currentDrawerBodyTemplate,
           [field]: value,
         };
       },
@@ -1455,13 +1455,13 @@ export default function AdminPage() {
   }
 
   function insertDrawerToken(token: (typeof drawerTemplateTokens)[number]) {
-    if (!drawerBodyVersion) {
+    if (!drawerBodyTemplate) {
       return;
     }
 
     const field = drawerSelection?.field || 'body';
     const tokenText = `{{${token}}}`;
-    const currentValue = drawerBodyVersion[field];
+    const currentValue = drawerBodyTemplate[field];
     const selectionStart =
       drawerSelection?.field === field
         ? drawerSelection.start
@@ -1477,7 +1477,7 @@ export default function AdminPage() {
     ].join('');
     const nextCaretPosition = selectionStart + tokenText.length;
 
-    updateDrawerBodyVersionField(field, nextValue);
+    updateDrawerBodyTemplateField(field, nextValue);
     setDrawerSelection({
       end: nextCaretPosition,
       field,
@@ -1699,22 +1699,22 @@ export default function AdminPage() {
     }
   }
 
-  async function saveBodyVersionDraft() {
-    if (!adminDocument || !drawerBodyVersion) {
+  async function saveBodyTemplateDraft() {
+    if (!adminDocument || !drawerBodyTemplate) {
       return;
     }
 
     setErrorMessage('');
-    setIsSavingBodyVersion(true);
+    setIsSavingBodyTemplate(true);
 
     try {
-      const input = sanitizeBodyVersionDraft(drawerBodyVersion);
-      const savedBodyVersion = drawerBodyVersion.id
-        ? await updateBodyVersion(drawerBodyVersion.id, input)
-        : await createBodyVersion(input);
-      const nextAdminDocument = upsertBodyVersion(
+      const input = sanitizeBodyTemplateDraft(drawerBodyTemplate);
+      const savedBodyTemplate = drawerBodyTemplate.id
+        ? await updateBodyTemplate(drawerBodyTemplate.id, input)
+        : await createBodyTemplate(input);
+      const nextAdminDocument = upsertBodyTemplate(
         adminDocument,
-        savedBodyVersion,
+        savedBodyTemplate,
       );
 
       persistAdminDocument(
@@ -1723,11 +1723,11 @@ export default function AdminPage() {
         setPersistedDocumentJson,
       );
       setConnectionWarning('');
-      setSelectedBodyVersionId(savedBodyVersion.id);
-      setDrawerBodyVersion(null);
+      setSelectedBodyTemplateId(savedBodyTemplate.id);
+      setDrawerBodyTemplate(null);
       setIsDrawerOpen(false);
       toast(
-        drawerBodyVersion.id
+        drawerBodyTemplate.id
           ? 'Body template updated.'
           : 'Body template created.',
         {
@@ -1737,28 +1737,28 @@ export default function AdminPage() {
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
-      setIsSavingBodyVersion(false);
+      setIsSavingBodyTemplate(false);
     }
   }
 
-  function previewBodyVersionDraft() {
-    if (!adminDocument || !drawerBodyVersion) {
+  function previewBodyTemplateDraft() {
+    if (!adminDocument || !drawerBodyTemplate) {
       return;
     }
 
-    const input = sanitizeBodyVersionDraftForPreview(drawerBodyVersion);
+    const input = sanitizeBodyTemplateDraftForPreview(drawerBodyTemplate);
     const previewAdminDocument = buildPreviewAdminDocument(
       adminDocument,
       input,
-      drawerBodyVersion.id,
+      drawerBodyTemplate.id,
     );
-    const previewVersionId = drawerBodyVersion.id || 'preview-draft';
+    const previewTemplateId = drawerBodyTemplate.id || 'preview-draft';
     const previewUrl = buildCoverLetterPreviewUrl(
       previewAdminDocument,
       {
         hiringManager: previewAdminDocument.defaults.hiringManager,
         title: previewAdminDocument.defaults.title,
-        versionId: previewVersionId,
+        templateId: previewTemplateId,
       },
       {
         embedded: true,
@@ -1766,10 +1766,10 @@ export default function AdminPage() {
     );
 
     setErrorMessage('');
-    setBodyVersionPreviewUrl(previewUrl);
+    setBodyTemplatePreviewUrl(previewUrl);
   }
 
-  function previewSavedBodyVersion(bodyVersion: CoverLetterBodyVersion) {
+  function previewSavedBodyTemplate(bodyTemplate: CoverLetterBodyTemplate) {
     if (!adminDocument) {
       return;
     }
@@ -1779,7 +1779,7 @@ export default function AdminPage() {
       {
         hiringManager: adminDocument.defaults.hiringManager,
         title: adminDocument.defaults.title,
-        versionId: bodyVersion.id,
+        templateId: bodyTemplate.id,
       },
       {
         embedded: true,
@@ -1787,20 +1787,20 @@ export default function AdminPage() {
     );
 
     setErrorMessage('');
-    setBodyVersionPreviewUrl(previewUrl);
+    setBodyTemplatePreviewUrl(previewUrl);
   }
 
   async function handleDuplicate(
     currentAdminDocument: CoverLetterAdminDocument,
-    bodyVersionId: string,
+    bodyTemplateId: string,
   ) {
     setErrorMessage('');
 
     try {
-      const savedBodyVersion = await duplicateBodyVersion(bodyVersionId);
-      const nextAdminDocument = upsertBodyVersion(
+      const savedBodyTemplate = await duplicateBodyTemplate(bodyTemplateId);
+      const nextAdminDocument = upsertBodyTemplate(
         currentAdminDocument,
-        savedBodyVersion,
+        savedBodyTemplate,
       );
 
       persistAdminDocument(
@@ -1809,7 +1809,7 @@ export default function AdminPage() {
         setPersistedDocumentJson,
       );
       setConnectionWarning('');
-      setSelectedBodyVersionId(savedBodyVersion.id);
+      setSelectedBodyTemplateId(savedBodyTemplate.id);
       toast('Body template duplicated.', {
         icon: successToastIcon,
       });
@@ -1820,23 +1820,23 @@ export default function AdminPage() {
 
   async function handleSetDefault(
     currentAdminDocument: CoverLetterAdminDocument,
-    bodyVersionId: string,
+    bodyTemplateId: string,
   ) {
     setErrorMessage('');
 
     try {
-      const savedBodyVersion = await setDefaultBodyVersion(bodyVersionId);
+      const savedBodyTemplate = await setDefaultBodyTemplate(bodyTemplateId);
       const nextAdminDocument = {
         ...currentAdminDocument,
         defaults: {
           ...currentAdminDocument.defaults,
-          defaultBodyVersionId: savedBodyVersion.id,
+          defaultBodyTemplateId: savedBodyTemplate.id,
         },
-        bodyVersions: currentAdminDocument.bodyVersions.map(
-          function mapBodyVersion(bodyVersion) {
+        bodyTemplates: currentAdminDocument.bodyTemplates.map(
+          function mapBodyTemplate(bodyTemplate) {
             return {
-              ...bodyVersion,
-              isDefault: bodyVersion.id === savedBodyVersion.id,
+              ...bodyTemplate,
+              isDefault: bodyTemplate.id === savedBodyTemplate.id,
             };
           },
         ),
@@ -1848,7 +1848,7 @@ export default function AdminPage() {
         setPersistedDocumentJson,
       );
       setConnectionWarning('');
-      setSelectedBodyVersionId(savedBodyVersion.id);
+      setSelectedBodyTemplateId(savedBodyTemplate.id);
       toast('Default body template updated.', {
         icon: successToastIcon,
       });
@@ -1859,33 +1859,33 @@ export default function AdminPage() {
 
   async function handleDelete(
     currentAdminDocument: CoverLetterAdminDocument,
-    bodyVersionId: string,
+    bodyTemplateId: string,
   ) {
     setErrorMessage('');
 
     try {
-      await deleteBodyVersion(bodyVersionId);
+      await deleteBodyTemplate(bodyTemplateId);
 
-      const remainingBodyVersions = currentAdminDocument.bodyVersions.filter(
-        function filterBodyVersion(bodyVersion) {
-          return bodyVersion.id !== bodyVersionId;
+      const remainingBodyTemplates = currentAdminDocument.bodyTemplates.filter(
+        function filterBodyTemplate(bodyTemplate) {
+          return bodyTemplate.id !== bodyTemplateId;
         },
       );
-      const nextDefaultBodyVersionId =
-        currentAdminDocument.defaults.defaultBodyVersionId === bodyVersionId
-          ? remainingBodyVersions[0]?.id || ''
-          : currentAdminDocument.defaults.defaultBodyVersionId;
+      const nextDefaultBodyTemplateId =
+        currentAdminDocument.defaults.defaultBodyTemplateId === bodyTemplateId
+          ? remainingBodyTemplates[0]?.id || ''
+          : currentAdminDocument.defaults.defaultBodyTemplateId;
       const nextAdminDocument = {
         ...currentAdminDocument,
         defaults: {
           ...currentAdminDocument.defaults,
-          defaultBodyVersionId: nextDefaultBodyVersionId,
+          defaultBodyTemplateId: nextDefaultBodyTemplateId,
         },
-        bodyVersions: remainingBodyVersions.map(
-          function mapBodyVersion(bodyVersion) {
+        bodyTemplates: remainingBodyTemplates.map(
+          function mapBodyTemplate(bodyTemplate) {
             return {
-              ...bodyVersion,
-              isDefault: bodyVersion.id === nextDefaultBodyVersionId,
+              ...bodyTemplate,
+              isDefault: bodyTemplate.id === nextDefaultBodyTemplateId,
             };
           },
         ),
@@ -1897,8 +1897,8 @@ export default function AdminPage() {
         setPersistedDocumentJson,
       );
       setConnectionWarning('');
-      setPendingDeleteBodyVersionId('');
-      setSelectedBodyVersionId(nextDefaultBodyVersionId);
+      setPendingDeleteBodyTemplateId('');
+      setSelectedBodyTemplateId(nextDefaultBodyTemplateId);
       toast('Body template deleted.', {
         icon: successToastIcon,
       });
@@ -1913,7 +1913,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (!selectedBodyVersion) {
+    if (!selectedBodyTemplate) {
       toast.error('Select a body template first.');
       return;
     }
@@ -1939,7 +1939,7 @@ export default function AdminPage() {
     try {
       const pdf = await generateAdminPdf(
         {
-          versionId: selectedBodyVersion.id,
+          templateId: selectedBodyTemplate.id,
           company: generateForm.company,
           hiringManager: generateForm.hiringManager || undefined,
           role: generateForm.role,
@@ -1958,7 +1958,7 @@ export default function AdminPage() {
 
       downloadBlob(
         pdf.blob,
-        pdf.filename || buildFallbackFilename(selectedBodyVersion.slug),
+        pdf.filename || buildFallbackFilename(selectedBodyTemplate.slug),
       );
       setIsGenerateDialogOpen(false);
       void loadGenerationLogs();
@@ -2055,22 +2055,22 @@ function parsePersistedDocument(persistedDocumentJson: string) {
   }
 }
 
-function getDefaultBodyVersion(adminDocument: CoverLetterAdminDocument) {
+function getDefaultBodyTemplate(adminDocument: CoverLetterAdminDocument) {
   return (
-    getBodyVersionById(
+    getBodyTemplateById(
       adminDocument,
-      adminDocument.defaults.defaultBodyVersionId,
-    ) || adminDocument.bodyVersions[0]
+      adminDocument.defaults.defaultBodyTemplateId,
+    ) || adminDocument.bodyTemplates[0]
   );
 }
 
-function getBodyVersionById(
+function getBodyTemplateById(
   adminDocument: CoverLetterAdminDocument,
-  bodyVersionId: string,
+  bodyTemplateId: string,
 ) {
   return (
-    adminDocument.bodyVersions.find(function findBodyVersion(bodyVersion) {
-      return bodyVersion.id === bodyVersionId;
+    adminDocument.bodyTemplates.find(function findBodyTemplate(bodyTemplate) {
+      return bodyTemplate.id === bodyTemplateId;
     }) || null
   );
 }
@@ -2101,23 +2101,23 @@ function buildFooterAddressLines(addressLines: string[], phoneValue: string) {
   return [...addressLines, phoneValue.trim()].filter(Boolean);
 }
 
-function createDraftFromBodyVersion(
-  bodyVersion: CoverLetterBodyVersion,
-): BodyVersionDraft {
+function createDraftFromBodyTemplate(
+  bodyTemplate: CoverLetterBodyTemplate,
+): BodyTemplateDraft {
   return {
-    body: bodyVersion.body,
-    greeting: bodyVersion.greeting,
-    id: bodyVersion.id,
-    name: bodyVersion.name,
-    signOff: bodyVersion.signOff,
-    slug: bodyVersion.slug,
+    body: bodyTemplate.body,
+    greeting: bodyTemplate.greeting,
+    id: bodyTemplate.id,
+    name: bodyTemplate.name,
+    signOff: bodyTemplate.signOff,
+    slug: bodyTemplate.slug,
   };
 }
 
-function createNewBodyVersionDraft(
+function createNewBodyTemplateDraft(
   adminDocument: CoverLetterAdminDocument,
-): BodyVersionDraft {
-  const nextIndex = adminDocument.bodyVersions.length + 1;
+): BodyTemplateDraft {
+  const nextIndex = adminDocument.bodyTemplates.length + 1;
   const baseName = `Version ${nextIndex}`;
 
   return {
@@ -2125,26 +2125,26 @@ function createNewBodyVersionDraft(
     greeting: 'Dear {{hiringManager}},',
     name: baseName,
     signOff: 'Warm regards,',
-    slug: buildUniqueSlug(adminDocument.bodyVersions, slugify(baseName)),
+    slug: buildUniqueSlug(adminDocument.bodyTemplates, slugify(baseName)),
   };
 }
 
-function sanitizeBodyVersionDraft(
-  bodyVersionDraft: BodyVersionDraft,
-): AdminBodyVersionInput {
+function sanitizeBodyTemplateDraft(
+  bodyTemplateDraft: BodyTemplateDraft,
+): AdminBodyTemplateInput {
   return {
-    body: bodyVersionDraft.body.trim(),
-    greeting: bodyVersionDraft.greeting.trim(),
-    name: bodyVersionDraft.name.trim(),
-    signOff: bodyVersionDraft.signOff.trim(),
-    slug: slugify(bodyVersionDraft.slug),
+    body: bodyTemplateDraft.body.trim(),
+    greeting: bodyTemplateDraft.greeting.trim(),
+    name: bodyTemplateDraft.name.trim(),
+    signOff: bodyTemplateDraft.signOff.trim(),
+    slug: slugify(bodyTemplateDraft.slug),
   };
 }
 
-function sanitizeBodyVersionDraftForPreview(
-  bodyVersionDraft: BodyVersionDraft,
-): AdminBodyVersionInput {
-  const input = sanitizeBodyVersionDraft(bodyVersionDraft);
+function sanitizeBodyTemplateDraftForPreview(
+  bodyTemplateDraft: BodyTemplateDraft,
+): AdminBodyTemplateInput {
+  const input = sanitizeBodyTemplateDraft(bodyTemplateDraft);
 
   return {
     body: input.body || '\u200B',
@@ -2155,39 +2155,39 @@ function sanitizeBodyVersionDraftForPreview(
   };
 }
 
-function upsertBodyVersion(
+function upsertBodyTemplate(
   adminDocument: CoverLetterAdminDocument,
-  bodyVersion: CoverLetterBodyVersion,
+  bodyTemplate: CoverLetterBodyTemplate,
 ): CoverLetterAdminDocument {
-  const hasExistingBodyVersion = adminDocument.bodyVersions.some(
-    function someBodyVersion(candidateBodyVersion) {
-      return candidateBodyVersion.id === bodyVersion.id;
+  const hasExistingBodyTemplate = adminDocument.bodyTemplates.some(
+    function someBodyTemplate(candidateBodyTemplate) {
+      return candidateBodyTemplate.id === bodyTemplate.id;
     },
   );
-  const nextBodyVersions = hasExistingBodyVersion
-    ? adminDocument.bodyVersions.map(
-        function mapBodyVersion(candidateBodyVersion) {
-          return candidateBodyVersion.id === bodyVersion.id
-            ? bodyVersion
-            : candidateBodyVersion;
+  const nextBodyTemplates = hasExistingBodyTemplate
+    ? adminDocument.bodyTemplates.map(
+        function mapBodyTemplate(candidateBodyTemplate) {
+          return candidateBodyTemplate.id === bodyTemplate.id
+            ? bodyTemplate
+            : candidateBodyTemplate;
         },
       )
-    : [...adminDocument.bodyVersions, bodyVersion];
+    : [...adminDocument.bodyTemplates, bodyTemplate];
 
   return {
     ...adminDocument,
-    bodyVersions: nextBodyVersions,
+    bodyTemplates: nextBodyTemplates,
   };
 }
 
 function buildUniqueSlug(
-  bodyVersions: CoverLetterBodyVersion[],
+  bodyTemplates: CoverLetterBodyTemplate[],
   baseSlug: string,
 ) {
   const normalizedBaseSlug = slugify(baseSlug) || 'version';
   const slugs = new Set(
-    bodyVersions.map(function mapBodyVersion(bodyVersion) {
-      return bodyVersion.slug;
+    bodyTemplates.map(function mapBodyTemplate(bodyTemplate) {
+      return bodyTemplate.slug;
     }),
   );
 
@@ -2293,18 +2293,18 @@ function downloadBlob(blob: Blob, filename: string) {
   }, 1000);
 }
 
-function buildFallbackFilename(bodyVersionSlug: string) {
-  return `cover-letter-${bodyVersionSlug}.pdf`;
+function buildFallbackFilename(bodyTemplateSlug: string) {
+  return `cover-letter-${bodyTemplateSlug}.pdf`;
 }
 
 function buildPreviewAdminDocument(
   adminDocument: CoverLetterAdminDocument,
-  input: AdminBodyVersionInput,
-  existingBodyVersionId?: string,
+  input: AdminBodyTemplateInput,
+  existingBodyTemplateId?: string,
 ) {
   const now = new Date().toISOString();
-  const previewBodyVersion = {
-    id: existingBodyVersionId || 'preview-draft',
+  const previewBodyTemplate = {
+    id: existingBodyTemplateId || 'preview-draft',
     slug: input.slug,
     name: input.name,
     greeting: input.greeting,
@@ -2314,21 +2314,21 @@ function buildPreviewAdminDocument(
     createdAt: now,
     updatedAt: now,
   };
-  const existingBodyVersion = adminDocument.bodyVersions.find(
-    function findBodyVersion(bodyVersion) {
-      return bodyVersion.id === previewBodyVersion.id;
+  const existingBodyTemplate = adminDocument.bodyTemplates.find(
+    function findBodyTemplate(bodyTemplate) {
+      return bodyTemplate.id === previewBodyTemplate.id;
     },
   );
 
   return {
     ...adminDocument,
-    bodyVersions: existingBodyVersion
-      ? adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
-          return bodyVersion.id === previewBodyVersion.id
-            ? previewBodyVersion
-            : bodyVersion;
+    bodyTemplates: existingBodyTemplate
+      ? adminDocument.bodyTemplates.map(function mapBodyTemplate(bodyTemplate) {
+          return bodyTemplate.id === previewBodyTemplate.id
+            ? previewBodyTemplate
+            : bodyTemplate;
         })
-      : [ ...adminDocument.bodyVersions, previewBodyVersion ],
+      : [ ...adminDocument.bodyTemplates, previewBodyTemplate ],
   };
 }
 
@@ -2358,15 +2358,15 @@ function isTemplateVariable(value: string) {
   return /^\{\{\w+\}\}$/.test(value);
 }
 
-function getUsedDrawerTokens(drawerBodyVersion: BodyVersionDraft | null) {
-  if (!drawerBodyVersion) {
+function getUsedDrawerTokens(drawerBodyTemplate: BodyTemplateDraft | null) {
+  if (!drawerBodyTemplate) {
     return [] as Array<(typeof drawerTemplateTokens)[number]>;
   }
 
   const content = [
-    drawerBodyVersion.greeting,
-    drawerBodyVersion.body,
-    drawerBodyVersion.signOff,
+    drawerBodyTemplate.greeting,
+    drawerBodyTemplate.body,
+    drawerBodyTemplate.signOff,
   ].join('\n');
 
   return drawerTemplateTokens.filter(function filterToken(token) {

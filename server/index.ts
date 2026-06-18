@@ -9,9 +9,8 @@ import puppeteer, { type Page } from 'puppeteer';
 import { ZodError } from 'zod';
 
 import {
-  adminBodyVersionInputSchema,
-  adminDocumentSchema,
-  buildBodyVersion,
+  adminBodyTemplateInputSchema,
+  buildBodyTemplate,
   getAdminDocument,
   saveAdminDocument
 } from './admin-store.ts';
@@ -21,12 +20,13 @@ import {
   getCoverLetterGenerationLogSummaries,
 } from './log-store.ts';
 import {
+  coverLetterGenerationLogSchemaVersion,
   type CoverLetterGenerationMethod,
   type CoverLetterGenerationLogEntry,
 } from '../src/admin/generation-logs.ts';
 import {
   type CoverLetterAdminDocument,
-  type CoverLetterBodyVersion,
+  type CoverLetterBodyTemplate,
   buildCoverLetter,
   buildCoverLetterSearchParams,
   getCoverLetterGenerationValidationMessage,
@@ -156,8 +156,7 @@ app.post('/api/admin/logs/:id/regenerate', async function regenerateAdminLogHand
 
 app.put('/api/admin', async function updateAdminHandler(request, response, next) {
   try {
-    const adminDocument = adminDocumentSchema.parse(request.body);
-    const savedAdminDocument = await saveAdminDocument(adminDocument);
+    const savedAdminDocument = await saveAdminDocument(request.body);
 
     response.json(savedAdminDocument);
   } catch (error) {
@@ -165,85 +164,85 @@ app.put('/api/admin', async function updateAdminHandler(request, response, next)
   }
 });
 
-app.post('/api/admin/body', async function createAdminBodyHandler(request, response, next) {
+app.post('/api/admin/templates', async function createAdminTemplateHandler(request, response, next) {
   try {
-    const input = adminBodyVersionInputSchema.parse(request.body);
+    const input = adminBodyTemplateInputSchema.parse(request.body);
     const adminDocument = await getAdminDocument();
-    const newBodyVersion = buildBodyVersion(input);
+    const newBodyTemplate = buildBodyTemplate(input);
     const nextAdminDocument = {
       ...adminDocument,
-      bodyVersions: [
-        ...adminDocument.bodyVersions,
-        newBodyVersion
+      bodyTemplates: [
+        ...adminDocument.bodyTemplates,
+        newBodyTemplate
       ]
     };
     const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
 
-    response.status(201).json(getBodyVersionById(savedAdminDocument, newBodyVersion.id));
+    response.status(201).json(getBodyTemplateById(savedAdminDocument, newBodyTemplate.id));
   } catch (error) {
     next(error);
   }
 });
 
-app.get('/api/admin/body/:id', async function adminBodyDetailHandler(request, response, next) {
+app.get('/api/admin/templates/:id', async function adminTemplateDetailHandler(request, response, next) {
   try {
     const adminDocument = await getAdminDocument();
-    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const bodyTemplate = getBodyTemplateById(adminDocument, request.params.id);
 
-    response.json(bodyVersion);
+    response.json(bodyTemplate);
   } catch (error) {
     next(error);
   }
 });
 
-app.put('/api/admin/body/:id', async function updateAdminBodyHandler(request, response, next) {
+app.put('/api/admin/templates/:id', async function updateAdminTemplateHandler(request, response, next) {
   try {
-    const input = adminBodyVersionInputSchema.parse(request.body);
+    const input = adminBodyTemplateInputSchema.parse(request.body);
     const adminDocument = await getAdminDocument();
-    const existingBodyVersion = getBodyVersionById(adminDocument, request.params.id);
-    const nextBodyVersion = buildBodyVersion(input, existingBodyVersion);
+    const existingBodyTemplate = getBodyTemplateById(adminDocument, request.params.id);
+    const nextBodyTemplate = buildBodyTemplate(input, existingBodyTemplate);
     const nextAdminDocument = {
       ...adminDocument,
-      bodyVersions: adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
-        return bodyVersion.id === request.params.id ? nextBodyVersion : bodyVersion;
+      bodyTemplates: adminDocument.bodyTemplates.map(function mapBodyTemplate(bodyTemplate) {
+        return bodyTemplate.id === request.params.id ? nextBodyTemplate : bodyTemplate;
       })
     };
     const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
 
-    response.json(getBodyVersionById(savedAdminDocument, request.params.id));
+    response.json(getBodyTemplateById(savedAdminDocument, request.params.id));
   } catch (error) {
     next(error);
   }
 });
 
-app.delete('/api/admin/body/:id', async function deleteAdminBodyHandler(request, response, next) {
+app.delete('/api/admin/templates/:id', async function deleteAdminTemplateHandler(request, response, next) {
   try {
     const adminDocument = await getAdminDocument();
 
-    if (adminDocument.bodyVersions.length === 1) {
+    if (adminDocument.bodyTemplates.length === 1) {
       response.status(400).json({
         error: 'Cannot delete the only body template.'
       });
       return;
     }
 
-    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
-    const remainingBodyVersions = adminDocument.bodyVersions.filter(function filterBodyVersion(candidateBodyVersion) {
-      return candidateBodyVersion.id !== bodyVersion.id;
+    const bodyTemplate = getBodyTemplateById(adminDocument, request.params.id);
+    const remainingBodyTemplates = adminDocument.bodyTemplates.filter(function filterBodyTemplate(candidateBodyTemplate) {
+      return candidateBodyTemplate.id !== bodyTemplate.id;
     });
-    const nextDefaultBodyVersionId = adminDocument.defaults.defaultBodyVersionId === bodyVersion.id
-      ? remainingBodyVersions[0].id
-      : adminDocument.defaults.defaultBodyVersionId;
+    const nextDefaultBodyTemplateId = adminDocument.defaults.defaultBodyTemplateId === bodyTemplate.id
+      ? remainingBodyTemplates[0].id
+      : adminDocument.defaults.defaultBodyTemplateId;
     const nextAdminDocument = {
       ...adminDocument,
       defaults: {
         ...adminDocument.defaults,
-        defaultBodyVersionId: nextDefaultBodyVersionId
+        defaultBodyTemplateId: nextDefaultBodyTemplateId
       },
-      bodyVersions: remainingBodyVersions.map(function mapBodyVersion(candidateBodyVersion) {
+      bodyTemplates: remainingBodyTemplates.map(function mapBodyTemplate(candidateBodyTemplate) {
         return {
-          ...candidateBodyVersion,
-          isDefault: candidateBodyVersion.id === nextDefaultBodyVersionId
+          ...candidateBodyTemplate,
+          isDefault: candidateBodyTemplate.id === nextDefaultBodyTemplateId
         };
       })
     };
@@ -256,15 +255,15 @@ app.delete('/api/admin/body/:id', async function deleteAdminBodyHandler(request,
   }
 });
 
-app.post('/api/admin/body/:id/duplicate', async function duplicateAdminBodyHandler(request, response, next) {
+app.post('/api/admin/templates/:id/duplicate', async function duplicateAdminTemplateHandler(request, response, next) {
   try {
     const adminDocument = await getAdminDocument();
-    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
-    const duplicatedSlug = buildUniqueSlug(adminDocument, `${bodyVersion.slug}-copy`);
-    const duplicatedBodyVersion = {
-      ...bodyVersion,
+    const bodyTemplate = getBodyTemplateById(adminDocument, request.params.id);
+    const duplicatedSlug = buildUniqueSlug(adminDocument, `${bodyTemplate.slug}-copy`);
+    const duplicatedBodyTemplate = {
+      ...bodyTemplate,
       id: crypto.randomUUID(),
-      name: `Copy of ${bodyVersion.name}`,
+      name: `Copy of ${bodyTemplate.name}`,
       slug: duplicatedSlug,
       isDefault: false,
       createdAt: new Date().toISOString(),
@@ -272,42 +271,42 @@ app.post('/api/admin/body/:id/duplicate', async function duplicateAdminBodyHandl
     };
     const nextAdminDocument = {
       ...adminDocument,
-      bodyVersions: [
-        ...adminDocument.bodyVersions,
-        duplicatedBodyVersion
+      bodyTemplates: [
+        ...adminDocument.bodyTemplates,
+        duplicatedBodyTemplate
       ]
     };
     const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
 
-    response.status(201).json(getBodyVersionById(savedAdminDocument, duplicatedBodyVersion.id));
+    response.status(201).json(getBodyTemplateById(savedAdminDocument, duplicatedBodyTemplate.id));
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/admin/body/:id/default', async function defaultAdminBodyHandler(request, response, next) {
+app.post('/api/admin/templates/:id/default', async function defaultAdminTemplateHandler(request, response, next) {
   try {
     const adminDocument = await getAdminDocument();
-    const bodyVersion = getBodyVersionById(adminDocument, request.params.id);
+    const bodyTemplate = getBodyTemplateById(adminDocument, request.params.id);
     const nextAdminDocument = {
       ...adminDocument,
       defaults: {
         ...adminDocument.defaults,
-        defaultBodyVersionId: bodyVersion.id
+        defaultBodyTemplateId: bodyTemplate.id
       },
-      bodyVersions: adminDocument.bodyVersions.map(function mapBodyVersion(candidateBodyVersion) {
+      bodyTemplates: adminDocument.bodyTemplates.map(function mapBodyTemplate(candidateBodyTemplate) {
         return {
-          ...candidateBodyVersion,
-          isDefault: candidateBodyVersion.id === bodyVersion.id,
-          updatedAt: candidateBodyVersion.id === bodyVersion.id
+          ...candidateBodyTemplate,
+          isDefault: candidateBodyTemplate.id === bodyTemplate.id,
+          updatedAt: candidateBodyTemplate.id === bodyTemplate.id
             ? new Date().toISOString()
-            : candidateBodyVersion.updatedAt
+            : candidateBodyTemplate.updatedAt
         };
       })
     };
     const savedAdminDocument = await saveAdminDocument(nextAdminDocument);
 
-    response.json(getBodyVersionById(savedAdminDocument, bodyVersion.id));
+    response.json(getBodyTemplateById(savedAdminDocument, bodyTemplate.id));
   } catch (error) {
     next(error);
   }
@@ -326,10 +325,10 @@ app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, 
       return;
     }
 
-    const adminDocument = applyPreviewBodyVersion(
+    const adminDocument = applyPreviewBodyTemplate(
       await getAdminDocument(),
-      request.body.previewBodyVersionId,
-      request.body.previewBodyVersion
+      request.body.previewBodyTemplateId,
+      request.body.previewBodyTemplate
     );
     const pdf = await renderCoverLetterPdf(
       coverLetterRequest,
@@ -587,7 +586,7 @@ function buildRenderUrl(
     ...coverLetterRequest,
     hiringManager: resolvedCoverLetter.recipient.hiringManager,
     title: resolvedCoverLetter.signature.title,
-    versionId: resolvedCoverLetter.bodyVersion.id
+    templateId: resolvedCoverLetter.bodyTemplate.id
   }).toString();
   renderUrl.searchParams.set('mode', 'print');
   renderUrl.searchParams.set('adminDocument', adminDocumentJson);
@@ -819,8 +818,9 @@ function buildCoverLetterGenerationLogEntry(
       role: resolvedCoverLetter.recipient.role,
       salutation: coverLetterRequest.salutation,
       title: resolvedCoverLetter.signature.title,
-      versionId: resolvedCoverLetter.bodyVersion.id
-    }
+      templateId: resolvedCoverLetter.bodyTemplate.id
+    },
+    schemaVersion: coverLetterGenerationLogSchemaVersion
   };
 }
 
@@ -918,48 +918,48 @@ function sendPdfResponse(
   response.send(pdf);
 }
 
-function getBodyVersionById(adminDocument: CoverLetterAdminDocument, bodyVersionId: string) {
-  const bodyVersion = adminDocument.bodyVersions.find(function findBodyVersion(candidateBodyVersion: CoverLetterBodyVersion) {
-    return candidateBodyVersion.id === bodyVersionId;
+function getBodyTemplateById(adminDocument: CoverLetterAdminDocument, bodyTemplateId: string) {
+  const bodyTemplate = adminDocument.bodyTemplates.find(function findBodyTemplate(candidateBodyTemplate: CoverLetterBodyTemplate) {
+    return candidateBodyTemplate.id === bodyTemplateId;
   });
 
-  if (!bodyVersion) {
-    throw new Error(`Body template not found: ${bodyVersionId}`);
+  if (!bodyTemplate) {
+    throw new Error(`Body template not found: ${bodyTemplateId}`);
   }
 
-  return bodyVersion;
+  return bodyTemplate;
 }
 
-function applyPreviewBodyVersion(
+function applyPreviewBodyTemplate(
   adminDocument: CoverLetterAdminDocument,
-  previewBodyVersionId: unknown,
-  previewBodyVersionInput: unknown
+  previewBodyTemplateId: unknown,
+  previewBodyTemplateInput: unknown
 ) {
-  const parsedPreviewBodyVersion = adminBodyVersionInputSchema.safeParse(previewBodyVersionInput);
+  const parsedPreviewBodyTemplate = adminBodyTemplateInputSchema.safeParse(previewBodyTemplateInput);
 
-  if (!parsedPreviewBodyVersion.success) {
+  if (!parsedPreviewBodyTemplate.success) {
     return adminDocument;
   }
 
-  const existingBodyVersion = typeof previewBodyVersionId === 'string'
-    ? adminDocument.bodyVersions.find(function findBodyVersion(bodyVersion) {
-        return bodyVersion.id === previewBodyVersionId;
+  const existingBodyTemplate = typeof previewBodyTemplateId === 'string'
+    ? adminDocument.bodyTemplates.find(function findBodyTemplate(bodyTemplate) {
+        return bodyTemplate.id === previewBodyTemplateId;
       })
     : undefined;
-  const previewBodyVersion = buildBodyVersion(parsedPreviewBodyVersion.data, existingBodyVersion);
-  const hasExistingBodyVersion = adminDocument.bodyVersions.some(function someBodyVersion(bodyVersion) {
-    return bodyVersion.id === previewBodyVersion.id;
+  const previewBodyTemplate = buildBodyTemplate(parsedPreviewBodyTemplate.data, existingBodyTemplate);
+  const hasExistingBodyTemplate = adminDocument.bodyTemplates.some(function someBodyTemplate(bodyTemplate) {
+    return bodyTemplate.id === previewBodyTemplate.id;
   });
 
   return {
     ...adminDocument,
-    bodyVersions: hasExistingBodyVersion
-      ? adminDocument.bodyVersions.map(function mapBodyVersion(bodyVersion) {
-          return bodyVersion.id === previewBodyVersion.id ? previewBodyVersion : bodyVersion;
+    bodyTemplates: hasExistingBodyTemplate
+      ? adminDocument.bodyTemplates.map(function mapBodyTemplate(bodyTemplate) {
+          return bodyTemplate.id === previewBodyTemplate.id ? previewBodyTemplate : bodyTemplate;
         })
       : [
-          ...adminDocument.bodyVersions,
-          previewBodyVersion
+          ...adminDocument.bodyTemplates,
+          previewBodyTemplate
         ]
   };
 }
@@ -968,8 +968,8 @@ function buildUniqueSlug(adminDocument: CoverLetterAdminDocument, baseSlug: stri
   let nextSlug = baseSlug;
   let suffix = 2;
 
-  while (adminDocument.bodyVersions.some(function someBodyVersion(bodyVersion: CoverLetterBodyVersion) {
-    return bodyVersion.slug === nextSlug;
+  while (adminDocument.bodyTemplates.some(function someBodyTemplate(bodyTemplate: CoverLetterBodyTemplate) {
+    return bodyTemplate.slug === nextSlug;
   })) {
     nextSlug = `${baseSlug}-${suffix}`;
     suffix += 1;

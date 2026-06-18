@@ -6,8 +6,10 @@ export interface CoverLetterRequest {
   title?: string;
   role: string;
   company: string;
-  versionId?: string;
+  templateId?: string;
 }
+
+export const coverLetterAdminDocumentSchemaVersion = 2;
 
 export interface CoverLetterContactMethod {
   id: 'address' | 'email' | 'website' | 'linkedin' | 'phone' | 'github';
@@ -19,7 +21,7 @@ export interface CoverLetterContactMethod {
   footerIcon?: 'email' | 'link' | 'linkedin' | 'github';
 }
 
-export interface CoverLetterBodyVersion {
+export interface CoverLetterBodyTemplate {
   id: string;
   slug: string;
   name: string;
@@ -42,7 +44,7 @@ interface CoverLetterDataModel {
   defaults: {
     hiringManager: string;
     title: string;
-    versionId: string;
+    templateId: string;
   };
   previewRequest: CoverLetterRequest;
   profile: {
@@ -54,10 +56,11 @@ interface CoverLetterDataModel {
     footerContactIds: CoverLetterContactMethod['id'][];
     contacts: CoverLetterContactMethod[];
   };
-  bodyVersions: CoverLetterBodyVersion[];
+  bodyTemplates: CoverLetterBodyTemplate[];
 }
 
 export interface CoverLetterAdminDocument {
+  schemaVersion: typeof coverLetterAdminDocumentSchemaVersion;
   profile: {
     name: string;
     logoAlt: string;
@@ -68,9 +71,9 @@ export interface CoverLetterAdminDocument {
   defaults: {
     title: string;
     hiringManager: string;
-    defaultBodyVersionId: string;
+    defaultBodyTemplateId: string;
   };
-  bodyVersions: CoverLetterBodyVersion[];
+  bodyTemplates: CoverLetterBodyTemplate[];
 }
 
 const coverLetterContactMethodShapeSchema = z.object({
@@ -137,7 +140,7 @@ export const coverLetterContactMethodSchema: z.ZodType<CoverLetterContactMethod>
   }
 );
 
-export const coverLetterBodyVersionSchema: z.ZodType<CoverLetterBodyVersion> = z.object({
+export const coverLetterBodyTemplateSchema: z.ZodType<CoverLetterBodyTemplate> = z.object({
   id: z.string().trim().min(1),
   slug: z.string().trim().min(1),
   name: z.string().trim().min(1),
@@ -150,6 +153,7 @@ export const coverLetterBodyVersionSchema: z.ZodType<CoverLetterBodyVersion> = z
 });
 
 export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument> = z.object({
+  schemaVersion: z.literal(coverLetterAdminDocumentSchemaVersion),
   profile: z.object({
     name: z.string().trim().min(1),
     logoAlt: z.string().trim().min(1),
@@ -160,36 +164,36 @@ export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument>
   defaults: z.object({
     title: z.string().trim().min(1),
     hiringManager: z.string().trim().min(1),
-    defaultBodyVersionId: z.string().trim().min(1)
+    defaultBodyTemplateId: z.string().trim().min(1)
   }),
-  bodyVersions: z.array(coverLetterBodyVersionSchema).min(1)
+  bodyTemplates: z.array(coverLetterBodyTemplateSchema).min(1)
 }).superRefine(function validateAdminDocument(adminDocument, context) {
-  const bodyVersionIds = new Set(adminDocument.bodyVersions.map(function mapBodyVersionId(bodyVersion) {
-    return bodyVersion.id;
+  const bodyTemplateIds = new Set(adminDocument.bodyTemplates.map(function mapBodyTemplateId(bodyTemplate) {
+    return bodyTemplate.id;
   }));
-  const bodyVersionSlugs = new Set<string>();
+  const bodyTemplateSlugs = new Set<string>();
   let defaultCount = 0;
 
-  for (const bodyVersion of adminDocument.bodyVersions) {
-    if (bodyVersionSlugs.has(bodyVersion.slug)) {
+  for (const bodyTemplate of adminDocument.bodyTemplates) {
+    if (bodyTemplateSlugs.has(bodyTemplate.slug)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: [ 'bodyVersions' ],
-        message: `Duplicate body template slug: ${bodyVersion.slug}`
+        path: [ 'bodyTemplates' ],
+        message: `Duplicate body template slug: ${bodyTemplate.slug}`
       });
     }
 
-    bodyVersionSlugs.add(bodyVersion.slug);
+    bodyTemplateSlugs.add(bodyTemplate.slug);
 
-    if (bodyVersion.isDefault) {
+    if (bodyTemplate.isDefault) {
       defaultCount += 1;
     }
   }
 
-  if (!bodyVersionIds.has(adminDocument.defaults.defaultBodyVersionId)) {
+  if (!bodyTemplateIds.has(adminDocument.defaults.defaultBodyTemplateId)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [ 'defaults', 'defaultBodyVersionId' ],
+      path: [ 'defaults', 'defaultBodyTemplateId' ],
       message: 'Default body template id must reference an existing body template.'
     });
   }
@@ -197,13 +201,14 @@ export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument>
   if (defaultCount !== 1) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [ 'bodyVersions' ],
+      path: [ 'bodyTemplates' ],
       message: 'Exactly one body template must be marked as default.'
     });
   }
 });
 
 const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDocument> = z.object({
+  schemaVersion: z.literal(coverLetterAdminDocumentSchemaVersion),
   profile: z.object({
     name: z.string().trim().min(1),
     logoAlt: z.string().trim().min(1),
@@ -214,36 +219,36 @@ const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDoc
   defaults: z.object({
     title: z.string().trim().min(1),
     hiringManager: z.string().trim().min(1),
-    defaultBodyVersionId: z.string().trim().min(1)
+    defaultBodyTemplateId: z.string().trim().min(1)
   }),
-  bodyVersions: z.array(coverLetterBodyVersionSchema).min(1)
+  bodyTemplates: z.array(coverLetterBodyTemplateSchema).min(1)
 }).superRefine(function validateAdminDocument(adminDocument, context) {
-  const bodyVersionIds = new Set(adminDocument.bodyVersions.map(function mapBodyVersionId(bodyVersion) {
-    return bodyVersion.id;
+  const bodyTemplateIds = new Set(adminDocument.bodyTemplates.map(function mapBodyTemplateId(bodyTemplate) {
+    return bodyTemplate.id;
   }));
-  const bodyVersionSlugs = new Set<string>();
+  const bodyTemplateSlugs = new Set<string>();
   let defaultCount = 0;
 
-  for (const bodyVersion of adminDocument.bodyVersions) {
-    if (bodyVersionSlugs.has(bodyVersion.slug)) {
+  for (const bodyTemplate of adminDocument.bodyTemplates) {
+    if (bodyTemplateSlugs.has(bodyTemplate.slug)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: [ 'bodyVersions' ],
-        message: `Duplicate body template slug: ${bodyVersion.slug}`
+        path: [ 'bodyTemplates' ],
+        message: `Duplicate body template slug: ${bodyTemplate.slug}`
       });
     }
 
-    bodyVersionSlugs.add(bodyVersion.slug);
+    bodyTemplateSlugs.add(bodyTemplate.slug);
 
-    if (bodyVersion.isDefault) {
+    if (bodyTemplate.isDefault) {
       defaultCount += 1;
     }
   }
 
-  if (!bodyVersionIds.has(adminDocument.defaults.defaultBodyVersionId)) {
+  if (!bodyTemplateIds.has(adminDocument.defaults.defaultBodyTemplateId)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [ 'defaults', 'defaultBodyVersionId' ],
+      path: [ 'defaults', 'defaultBodyTemplateId' ],
       message: 'Default body template id must reference an existing body template.'
     });
   }
@@ -251,7 +256,7 @@ const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDoc
   if (defaultCount !== 1) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [ 'bodyVersions' ],
+      path: [ 'bodyTemplates' ],
       message: 'Exactly one body template must be marked as default.'
     });
   }
@@ -264,7 +269,7 @@ export interface ResolvedCoverLetter {
     role: string;
     company: string;
   };
-  bodyVersion: {
+  bodyTemplate: {
     id: string;
     slug: string;
     name: string;
@@ -292,7 +297,7 @@ export const coverLetterDataModel: CoverLetterDataModel = {
   defaults: {
     hiringManager: 'Hiring Manager',
     title: 'Senior Product Designer & Full-Stack Developer',
-    versionId: 'standard'
+    templateId: 'standard'
   },
   previewRequest: {
     role: 'Role',
@@ -366,7 +371,7 @@ export const coverLetterDataModel: CoverLetterDataModel = {
       }
     ]
   },
-  bodyVersions: [
+  bodyTemplates: [
     {
       id: 'standard',
       slug: 'standard',
@@ -394,7 +399,7 @@ export const coverLetterRequestSchema = z.object({
   title: z.string().trim().min(1).optional(),
   role: z.string().trim().min(1),
   company: z.string().trim().min(1),
-  versionId: z.string().trim().min(1).optional()
+  templateId: z.string().trim().min(1).optional()
 });
 
 export function getCoverLetterPreviewRequest(overrides: Partial<CoverLetterRequest> = {}): CoverLetterRequest {
@@ -453,7 +458,7 @@ export function getCoverLetterRequestOverrides(searchParams: URLSearchParams): P
     title: searchParams.get('title') || undefined,
     role: searchParams.get('role') || undefined,
     company: searchParams.get('company') || undefined,
-    versionId: searchParams.get('versionId') || undefined
+    templateId: searchParams.get('templateId') || searchParams.get('versionId') || undefined
   });
 }
 
@@ -473,6 +478,7 @@ export function getCoverLetterAdminDocumentOverride(searchParams: URLSearchParam
 
 export function createDefaultCoverLetterAdminDocument(): CoverLetterAdminDocument {
   return normalizeCoverLetterAdminDocument({
+    schemaVersion: coverLetterAdminDocumentSchemaVersion,
     profile: {
       name: coverLetterDataModel.profile.name,
       logoAlt: coverLetterDataModel.profile.logoAlt,
@@ -483,16 +489,17 @@ export function createDefaultCoverLetterAdminDocument(): CoverLetterAdminDocumen
     defaults: {
       title: coverLetterDataModel.defaults.title,
       hiringManager: coverLetterDataModel.defaults.hiringManager,
-      defaultBodyVersionId: coverLetterDataModel.bodyVersions.find(function findDefaultBodyVersion(bodyVersion) {
-        return bodyVersion.isDefault;
-      })?.id || coverLetterDataModel.bodyVersions[0].id
+      defaultBodyTemplateId: coverLetterDataModel.bodyTemplates.find(function findDefaultBodyTemplate(bodyTemplate) {
+        return bodyTemplate.isDefault;
+      })?.id || coverLetterDataModel.bodyTemplates[0].id
     },
-    bodyVersions: coverLetterDataModel.bodyVersions
+    bodyTemplates: coverLetterDataModel.bodyTemplates
   });
 }
 
 export function normalizeCoverLetterAdminDocument(input: unknown): CoverLetterAdminDocument {
   const defaultAdminDocument = {
+    schemaVersion: coverLetterAdminDocumentSchemaVersion,
     profile: {
       name: coverLetterDataModel.profile.name,
       logoAlt: coverLetterDataModel.profile.logoAlt,
@@ -503,17 +510,17 @@ export function normalizeCoverLetterAdminDocument(input: unknown): CoverLetterAd
     defaults: {
       title: coverLetterDataModel.defaults.title,
       hiringManager: coverLetterDataModel.defaults.hiringManager,
-      defaultBodyVersionId: coverLetterDataModel.bodyVersions.find(function findDefaultBodyVersion(bodyVersion) {
-        return bodyVersion.isDefault;
-      })?.id || coverLetterDataModel.bodyVersions[0].id
+      defaultBodyTemplateId: coverLetterDataModel.bodyTemplates.find(function findDefaultBodyTemplate(bodyTemplate) {
+        return bodyTemplate.isDefault;
+      })?.id || coverLetterDataModel.bodyTemplates[0].id
     },
-    bodyVersions: coverLetterDataModel.bodyVersions
+    bodyTemplates: coverLetterDataModel.bodyTemplates
   } satisfies CoverLetterAdminDocument;
 
   const rawInput = isRecord(input) ? input : {};
   const rawProfile = isRecord(rawInput.profile) ? rawInput.profile : {};
   const rawDefaults = isRecord(rawInput.defaults) ? rawInput.defaults : {};
-  const rawBodyVersions = Array.isArray(rawInput.bodyVersions) ? rawInput.bodyVersions : defaultAdminDocument.bodyVersions;
+  const rawBodyTemplates = getRawBodyTemplates(rawInput, defaultAdminDocument.bodyTemplates);
   const rawContacts = Array.isArray(rawProfile.contacts) ? rawProfile.contacts : [];
   const legacyAddressLines = Array.isArray(rawProfile.addressLines)
     ? rawProfile.addressLines.filter(function filterAddressLine(addressLine): addressLine is string {
@@ -547,6 +554,7 @@ export function normalizeCoverLetterAdminDocument(input: unknown): CoverLetterAd
   });
   const nextFooterAddressLines = getFooterAddressLines(nextAddressLines, nextContacts);
   const nextAdminDocument = {
+    schemaVersion: coverLetterAdminDocumentSchemaVersion,
     profile: {
       name: normalizeString(rawProfile.name) || defaultAdminDocument.profile.name,
       logoAlt: normalizeString(rawProfile.logoAlt) || defaultAdminDocument.profile.logoAlt,
@@ -557,10 +565,11 @@ export function normalizeCoverLetterAdminDocument(input: unknown): CoverLetterAd
     defaults: {
       title: normalizeString(rawDefaults.title) || defaultAdminDocument.defaults.title,
       hiringManager: normalizeString(rawDefaults.hiringManager) || defaultAdminDocument.defaults.hiringManager,
-      defaultBodyVersionId: normalizeString(rawDefaults.defaultBodyVersionId)
-        || defaultAdminDocument.defaults.defaultBodyVersionId
+      defaultBodyTemplateId: normalizeString(rawDefaults.defaultBodyTemplateId)
+        || normalizeString(rawDefaults.defaultBodyVersionId)
+        || defaultAdminDocument.defaults.defaultBodyTemplateId
     },
-    bodyVersions: rawBodyVersions
+    bodyTemplates: rawBodyTemplates
   };
 
   return coverLetterAdminDocumentNormalizationSchema.parse(nextAdminDocument);
@@ -573,7 +582,7 @@ export function buildCoverLetter(
   const hiringManager = request.hiringManager || adminDocument.defaults.hiringManager;
   const salutation = request.salutation;
   const title = request.title || adminDocument.defaults.title;
-  const bodyVersion = getBodyVersion(adminDocument, request.versionId);
+  const bodyTemplate = getBodyTemplate(adminDocument, request.templateId);
   const templateValues = {
     hiringManager,
     title,
@@ -588,17 +597,17 @@ export function buildCoverLetter(
       role: request.role,
       company: request.company
     },
-    bodyVersion: {
-      id: bodyVersion.id,
-      slug: bodyVersion.slug,
-      name: bodyVersion.name
+    bodyTemplate: {
+      id: bodyTemplate.id,
+      slug: bodyTemplate.slug,
+      name: bodyTemplate.name
     },
     body: {
-      greeting: salutation || resolveTemplate(bodyVersion.greeting, templateValues),
-      paragraphs: splitBodyIntoParagraphs(bodyVersion.body).map(function mapParagraph(paragraph) {
+      greeting: salutation || resolveTemplate(bodyTemplate.greeting, templateValues),
+      paragraphs: splitBodyIntoParagraphs(bodyTemplate.body).map(function mapParagraph(paragraph) {
         return resolveTemplate(paragraph, templateValues);
       }),
-      signOff: resolveTemplate(bodyVersion.signOff, templateValues)
+      signOff: resolveTemplate(bodyTemplate.signOff, templateValues)
     },
     signature: {
       name: adminDocument.profile.name,
@@ -615,19 +624,19 @@ export function buildCoverLetter(
   };
 }
 
-function getBodyVersion(
+function getBodyTemplate(
   adminDocument: CoverLetterAdminDocument,
-  versionId?: string
-): CoverLetterBodyVersion {
-  if (versionId) {
-    return adminDocument.bodyVersions.find(function findBodyVersionById(bodyVersion) {
-      return bodyVersion.id === versionId;
-    }) || adminDocument.bodyVersions[0];
+  templateId?: string
+): CoverLetterBodyTemplate {
+  if (templateId) {
+    return adminDocument.bodyTemplates.find(function findBodyTemplateById(bodyTemplate) {
+      return bodyTemplate.id === templateId;
+    }) || adminDocument.bodyTemplates[0];
   }
 
-  return adminDocument.bodyVersions.find(function findDefaultBodyVersion(bodyVersion) {
-    return bodyVersion.id === adminDocument.defaults.defaultBodyVersionId;
-  }) || adminDocument.bodyVersions[0];
+  return adminDocument.bodyTemplates.find(function findDefaultBodyTemplate(bodyTemplate) {
+    return bodyTemplate.id === adminDocument.defaults.defaultBodyTemplateId;
+  }) || adminDocument.bodyTemplates[0];
 }
 
 function getOrderedContacts(adminDocument: CoverLetterAdminDocument, location: 'signature' | 'footer'): CoverLetterContactMethod[] {
@@ -793,6 +802,21 @@ function normalizeString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function getRawBodyTemplates(
+  rawInput: Record<string, unknown>,
+  defaultBodyTemplates: CoverLetterBodyTemplate[]
+) {
+  if (Array.isArray(rawInput.bodyTemplates)) {
+    return rawInput.bodyTemplates;
+  }
+
+  if (Array.isArray(rawInput.bodyVersions)) {
+    return rawInput.bodyVersions;
+  }
+
+  return defaultBodyTemplates;
+}
+
 function parseUrlLike(value: string) {
   try {
     return new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
@@ -880,7 +904,7 @@ function normalizeCoverLetterRequest(input: unknown): Partial<CoverLetterRequest
     return {};
   }
 
-  return Object.fromEntries(
+  const normalizedRequest = Object.fromEntries(
     Object.entries(input).flatMap(function mapEntry([ key, value ]) {
       if (typeof value !== 'string') {
         return [];
@@ -895,6 +919,14 @@ function normalizeCoverLetterRequest(input: unknown): Partial<CoverLetterRequest
       return [[ key, normalizedValue ]];
     })
   ) as Partial<CoverLetterRequest>;
+
+  if (!normalizedRequest.templateId && 'versionId' in normalizedRequest) {
+    normalizedRequest.templateId = (normalizedRequest as { versionId?: string }).versionId;
+  }
+
+  delete (normalizedRequest as { versionId?: string }).versionId;
+
+  return normalizedRequest;
 }
 
 function splitBodyIntoParagraphs(body: string) {
