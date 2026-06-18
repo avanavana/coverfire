@@ -546,8 +546,8 @@ export default function AdminPage() {
       >
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <FireAnimation size={40} className="shrink-0" />
+            <div className="flex items-center gap-0">
+              <FireAnimation size={32} className="shrink-0 relative -top-1" />
               <h1 className="text-2xl font-semibold tracking-tight">
                 Coverfire Admin
               </h1>
