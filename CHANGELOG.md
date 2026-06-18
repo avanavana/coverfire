@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-06-18
+
+### Fixed
+
+- Fix the Render production build by moving the Puppeteer DIN font readiness check into browser-context evaluation
+
 ## [1.2.0] - 2026-06-18
 
 ### Added

@@ -469,11 +469,11 @@ async function waitForCoverLetterFonts(page: Page) {
   await page.evaluateHandle('document.fonts.ready');
 
   try {
-    await page.waitForFunction(function hasLoadedDinFaces() {
-      return Array.from(document.fonts).some(function isLoadedDinFace(fontFace) {
+    await page.waitForFunction(`
+      Array.from(document.fonts).some(function isLoadedDinFace(fontFace) {
         return fontFace.family === 'din-2014' && fontFace.status === 'loaded';
-      });
-    }, {
+      })
+    `, {
       timeout: 5000
     });
   } catch (_error) {
