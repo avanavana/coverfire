@@ -14,14 +14,6 @@ import { generateAdminPdf } from '@/admin/api';
 import { buttonVariants, Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Email, GitHub, Link, LinkedIn } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import {
@@ -326,33 +318,13 @@ export default function CoverLetterPage() {
                   data-vaul-no-drag
                   className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5"
                 >
-                  <LabeledField label="Body Template">
-                    <Select
-                      value={selectedBodyTemplate.id}
-                      onValueChange={function handleBodyTemplateChange(value) {
-                        updatePreviewGenerateFormField('templateId', value);
-                      }}
-                    >
-                      <SelectTrigger data-vaul-no-drag className="w-full">
-                        <SelectValue placeholder="Select a body template" />
-                      </SelectTrigger>
-                      <SelectContent position="item-aligned">
-                        <SelectGroup>
-                          {adminDocument.bodyTemplates.map(function mapBodyTemplate(
-                            bodyTemplate,
-                          ) {
-                            return (
-                              <SelectItem
-                                key={bodyTemplate.id}
-                                value={bodyTemplate.id}
-                              >
-                                {bodyTemplate.name}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                  <LabeledField htmlFor="preview-body-template" label="Body Template">
+                    <Input
+                      data-vaul-no-drag
+                      disabled
+                      id="preview-body-template"
+                      value={selectedBodyTemplate.name}
+                    />
                   </LabeledField>
                   <LabeledField htmlFor="preview-title" label="Title">
                     <Input

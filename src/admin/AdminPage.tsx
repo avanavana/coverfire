@@ -1306,6 +1306,13 @@ export default function AdminPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
+            <LabeledField htmlFor="generate-body-template" label="Body Template">
+              <Input
+                disabled
+                id="generate-body-template"
+                value={selectedBodyTemplate?.name || ''}
+              />
+            </LabeledField>
             <LabeledField htmlFor="generate-role" label="Role">
               <Input
                 id="generate-role"
