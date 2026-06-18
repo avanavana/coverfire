@@ -222,7 +222,7 @@ app.delete('/api/admin/body/:id', async function deleteAdminBodyHandler(request,
 
     if (adminDocument.bodyVersions.length === 1) {
       response.status(400).json({
-        error: 'Cannot delete the only body version.'
+        error: 'Cannot delete the only body template.'
       });
       return;
     }
@@ -924,7 +924,7 @@ function getBodyVersionById(adminDocument: CoverLetterAdminDocument, bodyVersion
   });
 
   if (!bodyVersion) {
-    throw new Error(`Body version not found: ${bodyVersionId}`);
+    throw new Error(`Body template not found: ${bodyVersionId}`);
   }
 
   return bodyVersion;

@@ -663,9 +663,9 @@ export default function AdminPage() {
           <div className="grid flex-1 gap-6 pb-6 xl:min-h-0 xl:grid-cols-[minmax(0,1.35fr)_24rem]">
           <Card className="flex flex-col shadow-sm xl:min-h-0">
             <CardHeader>
-              <CardTitle>Body Versions</CardTitle>
+              <CardTitle>Body Templates</CardTitle>
               <CardDescription>
-                Select the body version you want to generate.
+                Select the body template you want to generate.
               </CardDescription>
               <CardAction>
                 <Button
@@ -679,7 +679,7 @@ export default function AdminPage() {
                   }}
                 >
                   <Plus data-icon="inline-start" />
-                  New version
+                  New template
                 </Button>
               </CardAction>
             </CardHeader>
@@ -1068,9 +1068,9 @@ export default function AdminPage() {
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
           <Drawer.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l bg-background shadow-lg outline-none">
-            <Drawer.Title className="sr-only">Edit body version</Drawer.Title>
+            <Drawer.Title className="sr-only">Edit body template</Drawer.Title>
             <Drawer.Description className="sr-only">
-              Edit a single cover-letter body version.
+              Edit a single cover-letter body template.
             </Drawer.Description>
             {drawerBodyVersion ? (
               <>
@@ -1078,11 +1078,11 @@ export default function AdminPage() {
                   <div className="grid gap-1">
                     <h2 className="text-lg font-semibold">
                       {drawerBodyVersion.id
-                        ? 'Edit body version'
-                        : 'Create body version'}
+                        ? 'Edit body template'
+                        : 'Create body template'}
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Update the selected body version.
+                      Update the selected body template.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1279,16 +1279,16 @@ export default function AdminPage() {
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>Preview body version</DialogTitle>
+            <DialogTitle>Preview body template</DialogTitle>
             <DialogDescription>
-              Preview the selected cover-letter body version.
+              Preview the selected cover-letter body template.
             </DialogDescription>
           </DialogHeader>
           {bodyVersionPreviewUrl ? (
             <iframe
               className="h-full w-full border-0"
               src={bodyVersionPreviewUrl}
-              title="Body version preview"
+              title="Body template preview"
             />
           ) : null}
         </DialogContent>
@@ -1399,11 +1399,11 @@ export default function AdminPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete body version?</AlertDialogTitle>
+            <AlertDialogTitle>Delete body template?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDeleteBodyVersion
                 ? `This will delete "${pendingDeleteBodyVersion.name}".`
-                : 'This body version will be deleted.'}
+                : 'This body template will be deleted.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1728,8 +1728,8 @@ export default function AdminPage() {
       setIsDrawerOpen(false);
       toast(
         drawerBodyVersion.id
-          ? 'Body version updated.'
-          : 'Body version created.',
+          ? 'Body template updated.'
+          : 'Body template created.',
         {
           icon: successToastIcon,
         },
@@ -1810,7 +1810,7 @@ export default function AdminPage() {
       );
       setConnectionWarning('');
       setSelectedBodyVersionId(savedBodyVersion.id);
-      toast('Body version duplicated.', {
+      toast('Body template duplicated.', {
         icon: successToastIcon,
       });
     } catch (error) {
@@ -1849,7 +1849,7 @@ export default function AdminPage() {
       );
       setConnectionWarning('');
       setSelectedBodyVersionId(savedBodyVersion.id);
-      toast('Default body version updated.', {
+      toast('Default body template updated.', {
         icon: successToastIcon,
       });
     } catch (error) {
@@ -1899,7 +1899,7 @@ export default function AdminPage() {
       setConnectionWarning('');
       setPendingDeleteBodyVersionId('');
       setSelectedBodyVersionId(nextDefaultBodyVersionId);
-      toast('Body version deleted.', {
+      toast('Body template deleted.', {
         icon: successToastIcon,
       });
     } catch (error) {
@@ -1914,7 +1914,7 @@ export default function AdminPage() {
     }
 
     if (!selectedBodyVersion) {
-      toast.error('Select a body version first.');
+      toast.error('Select a body template first.');
       return;
     }
 

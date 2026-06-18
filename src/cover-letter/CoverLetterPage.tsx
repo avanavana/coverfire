@@ -326,7 +326,7 @@ export default function CoverLetterPage() {
                   data-vaul-no-drag
                   className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5"
                 >
-                  <LabeledField label="Body Version">
+                  <LabeledField label="Body Template">
                     <Select
                       value={selectedBodyVersion.id}
                       onValueChange={function handleBodyVersionChange(value) {
@@ -334,7 +334,7 @@ export default function CoverLetterPage() {
                       }}
                     >
                       <SelectTrigger data-vaul-no-drag className="w-full">
-                        <SelectValue placeholder="Select a body version" />
+                        <SelectValue placeholder="Select a body template" />
                       </SelectTrigger>
                       <SelectContent position="item-aligned">
                         <SelectGroup>

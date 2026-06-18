@@ -175,7 +175,7 @@ export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument>
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: [ 'bodyVersions' ],
-        message: `Duplicate body version slug: ${bodyVersion.slug}`
+        message: `Duplicate body template slug: ${bodyVersion.slug}`
       });
     }
 
@@ -190,7 +190,7 @@ export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument>
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: [ 'defaults', 'defaultBodyVersionId' ],
-      message: 'Default body version id must reference an existing body version.'
+      message: 'Default body template id must reference an existing body template.'
     });
   }
 
@@ -198,7 +198,7 @@ export const coverLetterAdminDocumentSchema: z.ZodType<CoverLetterAdminDocument>
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: [ 'bodyVersions' ],
-      message: 'Exactly one body version must be marked as default.'
+      message: 'Exactly one body template must be marked as default.'
     });
   }
 });
@@ -229,7 +229,7 @@ const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDoc
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: [ 'bodyVersions' ],
-        message: `Duplicate body version slug: ${bodyVersion.slug}`
+        message: `Duplicate body template slug: ${bodyVersion.slug}`
       });
     }
 
@@ -244,7 +244,7 @@ const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDoc
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: [ 'defaults', 'defaultBodyVersionId' ],
-      message: 'Default body version id must reference an existing body version.'
+      message: 'Default body template id must reference an existing body template.'
     });
   }
 
@@ -252,7 +252,7 @@ const coverLetterAdminDocumentNormalizationSchema: z.ZodType<CoverLetterAdminDoc
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: [ 'bodyVersions' ],
-      message: 'Exactly one body version must be marked as default.'
+      message: 'Exactly one body template must be marked as default.'
     });
   }
 });
@@ -858,13 +858,21 @@ function isValidPhoneValue(value: string) {
 }
 
 function resolveTemplate(template: string, values: CoverLetterTemplateValues): string {
-  return template.replace(/\{\{(\w+)\}\}/g, function replaceToken(_, token) {
+  return template.replace(/\{\{(\w+)\}\}(\.)?/g, function replaceToken(_, token, trailingPeriod = '') {
     if (token === 'titlePlainText') {
-      return values.title;
+      return resolveTemplateValue(values.title, trailingPeriod);
     }
 
-    return values[token as keyof typeof values] || '';
+    return resolveTemplateValue(values[token as keyof typeof values] || '', trailingPeriod);
   });
+}
+
+function resolveTemplateValue(value: string, trailingPeriod: string) {
+  if (trailingPeriod && value.trimEnd().endsWith('.')) {
+    return value;
+  }
+
+  return `${value}${trailingPeriod}`;
 }
 
 function normalizeCoverLetterRequest(input: unknown): Partial<CoverLetterRequest> {

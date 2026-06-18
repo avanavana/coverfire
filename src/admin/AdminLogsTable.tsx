@@ -150,7 +150,7 @@ export function AdminLogsTable({
       },
       header: function renderBodyVersionHeader({ column }) {
         return (
-          <DataTableColumnHeader column={column} title="Body version" />
+          <DataTableColumnHeader column={column} title="Body template" />
         );
       },
     },
@@ -650,7 +650,7 @@ function downloadBlob(blob: Blob, filename: string) {
 function getColumnLabel(columnId: string) {
   switch (columnId) {
     case 'bodyVersionName':
-      return 'Body version';
+      return 'Body template';
     case 'createdAt':
       return 'Created';
     case 'filename':
