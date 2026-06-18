@@ -1,4 +1,12 @@
-import type { CoverLetterAdminDocument, CoverLetterBodyVersion, CoverLetterRequest } from '@/cover-letter';
+import type {
+  CoverLetterAdminDocument,
+  CoverLetterBodyVersion,
+  CoverLetterRequest,
+} from '@/cover-letter';
+import type {
+  CoverLetterGenerationLogEntry,
+  CoverLetterGenerationLogSummary,
+} from '@/admin/generation-logs';
 
 export interface AdminBodyVersionInput {
   name: string;
@@ -9,6 +17,7 @@ export interface AdminBodyVersionInput {
 }
 
 interface GenerateAdminPdfOptions {
+  method?: 'admin-preview' | 'admin-ui';
   previewBodyVersion?: AdminBodyVersionInput;
   previewBodyVersionId?: string;
 }
@@ -41,6 +50,14 @@ export class AdminApiError extends Error {
 
 export async function fetchAdminDocument() {
   return request<CoverLetterAdminDocument>('/api/admin');
+}
+
+export async function fetchCoverLetterGenerationLog(logEntryId: string) {
+  return request<CoverLetterGenerationLogEntry>(`/api/admin/logs/${logEntryId}`);
+}
+
+export async function fetchCoverLetterGenerationLogs() {
+  return request<CoverLetterGenerationLogSummary[]>('/api/admin/logs');
 }
 
 export async function saveAdminDocument(adminDocument: CoverLetterAdminDocument) {
@@ -91,6 +108,7 @@ export async function generateAdminPdf(requestBody: CoverLetterRequest, options:
     }),
     headers: {
       'Content-Type': 'application/json',
+      'X-Coverfire-Method': options.method || 'admin-ui',
       ...(typeof window !== 'undefined'
         ? { 'X-Coverfire-Render-Origin': window.location.origin }
         : {})
@@ -129,6 +147,34 @@ export async function generatePdf(requestBody: CoverLetterRequest, apiKey: strin
   return {
     blob: await response.blob(),
     filename: getFilenameFromDisposition(response.headers.get('Content-Disposition'))
+  };
+}
+
+export async function regenerateCoverLetterGenerationLog(logEntryId: string) {
+  const response = await fetchWithRetry(
+    buildApiUrl(`/api/admin/logs/${logEntryId}/regenerate`),
+    {
+      headers: {
+        ...(typeof window !== 'undefined'
+          ? { 'X-Coverfire-Render-Origin': window.location.origin }
+          : {})
+      },
+      method: 'POST'
+    },
+    {
+      timeoutMs: pdfRequestTimeoutMs
+    },
+  );
+
+  if (!response.ok) {
+    throw await buildError(response);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getFilenameFromDisposition(
+      response.headers.get('Content-Disposition'),
+    )
   };
 }
 

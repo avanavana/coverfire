@@ -197,6 +197,7 @@ export default function CoverLetterPage() {
 
     try {
       const pdf = await generateAdminPdf(resolvedPreviewRequest, {
+        method: 'admin-preview',
         previewBodyVersion: selectedBodyVersion
           ? getPreviewBodyVersionInput(selectedBodyVersion)
           : undefined,

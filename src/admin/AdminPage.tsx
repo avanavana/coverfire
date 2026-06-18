@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner';
 import { Drawer } from 'vaul';
 
+import { AdminLogsTable } from '@/admin/AdminLogsTable';
 import { BodyEditor } from '@/admin/rich-text';
 import {
   AdminApiError,
@@ -33,11 +34,15 @@ import {
   deleteBodyVersion,
   duplicateBodyVersion,
   fetchAdminDocument,
+  fetchCoverLetterGenerationLogs,
   generateAdminPdf,
   saveAdminDocument,
   setDefaultBodyVersion,
   updateBodyVersion,
 } from '@/admin/api';
+import { buildCoverLetterPreviewUrl } from '@/admin/preview-url';
+import { type CoverLetterGenerationLogSummary } from '@/admin/generation-logs';
+import FireAnimation from '@/components/fire-animation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -84,13 +89,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 import {
-  buildCoverLetterSearchParams,
-  getCoverLetterGenerationValidationMessage,
-  getCoverLetterPreviewRequest,
-  serializeCoverLetterAdminDocument,
-} from '@/cover-letter';
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { getCoverLetterGenerationValidationMessage } from '@/cover-letter';
 
 import type { AdminBodyVersionInput } from '@/admin/api';
 import type {
@@ -152,18 +158,25 @@ export default function AdminPage() {
   const [pendingDeleteBodyVersionId, setPendingDeleteBodyVersionId] =
     useState('');
   const [bodyVersionPreviewUrl, setBodyVersionPreviewUrl] = useState('');
+  const [generationLogs, setGenerationLogs] = useState<
+    CoverLetterGenerationLogSummary[]
+  >([]);
   const [generateForm, setGenerateForm] = useState<GenerateFormState>(
     createInitialGenerateFormState,
   );
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingGenerationLogs, setIsLoadingGenerationLogs] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetryingAdminDocument, setIsRetryingAdminDocument] = useState(false);
   const [isSavingBodyVersion, setIsSavingBodyVersion] = useState(false);
   const [isSavingSignatureFields, setIsSavingSignatureFields] = useState(false);
   const [connectionWarning, setConnectionWarning] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [generationLogsErrorMessage, setGenerationLogsErrorMessage] =
+    useState('');
   const [drawerSelection, setDrawerSelection] =
     useState<DrawerSelectionState | null>(null);
   const greetingInputRef = useRef<HTMLInputElement | null>(null);
@@ -298,6 +311,34 @@ export default function AdminPage() {
     [applyLoadedAdminDocument],
   );
 
+  const loadGenerationLogs = useCallback(
+    async function loadGenerationLogs() {
+      setIsLoadingGenerationLogs(true);
+
+      try {
+        const nextGenerationLogs = await fetchCoverLetterGenerationLogs();
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setGenerationLogs(nextGenerationLogs);
+        setGenerationLogsErrorMessage('');
+      } catch (error) {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setGenerationLogsErrorMessage(getErrorMessage(error));
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoadingGenerationLogs(false);
+        }
+      }
+    },
+    [],
+  );
+
   useEffect(
     function syncLatestAdminDocumentRef() {
       latestAdminDocumentRef.current = adminDocument;
@@ -319,6 +360,7 @@ export default function AdminPage() {
         && event.data === 'coverfire:close-preview'
       ) {
         setBodyVersionPreviewUrl('');
+        void loadGenerationLogs();
       }
     }
 
@@ -327,7 +369,7 @@ export default function AdminPage() {
     return function cleanupPreviewMessageListener() {
       window.removeEventListener('message', handlePreviewMessage);
     };
-  }, []);
+  }, [loadGenerationLogs]);
 
   useEffect(
     function syncLatestPersistedDocumentJsonRef() {
@@ -361,6 +403,19 @@ export default function AdminPage() {
       };
     },
     [loadAdminDocument],
+  );
+
+  useEffect(
+    function loadInitialGenerationLogs() {
+      const timeoutId = window.setTimeout(function beginInitialLogLoad() {
+        void loadGenerationLogs();
+      }, 0);
+
+      return function cleanup() {
+        window.clearTimeout(timeoutId);
+      };
+    },
+    [loadGenerationLogs],
   );
 
   useEffect(
@@ -484,64 +539,77 @@ export default function AdminPage() {
   const usedDrawerTokens = getUsedDrawerTokens(drawerBodyVersion);
   return (
     <div className="min-h-screen bg-muted/30">
-      <div className="container mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6">
+      <Tabs
+        value={activeTab}
+        className="container mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6"
+        onValueChange={setActiveTab}
+      >
         <header className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Coverfire Admin
-            </h1>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <FireAnimation size={40} className="shrink-0" />
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Coverfire Admin
+              </h1>
+            </div>
+            <TabsList>
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
+            </TabsList>
           </div>
-          <div className="flex items-center gap-2">
-            {hasUnsavedSignatureFields ? (
+          {activeTab === 'dashboard' ? (
+            <div className="flex items-center gap-2">
+              {hasUnsavedSignatureFields ? (
+                <Button
+                  variant="outline"
+                  disabled={isSavingSignatureFields}
+                  onClick={function handleSaveSignatureFieldsClick() {
+                    void saveSignatureFields(adminDocument);
+                  }}
+                >
+                  {isSavingSignatureFields ? (
+                    <LoaderCircle
+                      className="animate-spin"
+                      data-icon="inline-start"
+                    />
+                  ) : (
+                    <Save data-icon="inline-start" />
+                  )}
+                  Save
+                </Button>
+              ) : null}
               <Button
-                variant="outline"
-                disabled={isSavingSignatureFields}
-                onClick={function handleSaveSignatureFieldsClick() {
-                  void saveSignatureFields(adminDocument);
+                onClick={function handleOpenGenerateDialog() {
+                  setErrorMessage('');
+                  setGenerateForm(
+                    function updateGenerateForm(currentGenerateForm) {
+                      const nextHiringManager =
+                        currentGenerateForm.hiringManager ||
+                        adminDocument.defaults.hiringManager;
+
+                      return {
+                        ...currentGenerateForm,
+                        hiringManager: nextHiringManager,
+                        salutation: syncGenerateSalutation(
+                          currentGenerateForm.salutation,
+                          currentGenerateForm.hiringManager,
+                          nextHiringManager,
+                          adminDocument.defaults.hiringManager,
+                        ),
+                        title:
+                          currentGenerateForm.title ||
+                          adminDocument.defaults.title,
+                      };
+                    },
+                  );
+                  setIsGenerateDialogOpen(true);
                 }}
               >
-                {isSavingSignatureFields ? (
-                  <LoaderCircle
-                    className="animate-spin"
-                    data-icon="inline-start"
-                  />
-                ) : (
-                  <Save data-icon="inline-start" />
-                )}
-                Save
+                <FileText data-icon="inline-start" />
+                Generate PDF
               </Button>
-            ) : null}
-            <Button
-              onClick={function handleOpenGenerateDialog() {
-                setErrorMessage('');
-                setGenerateForm(
-                  function updateGenerateForm(currentGenerateForm) {
-                    const nextHiringManager =
-                      currentGenerateForm.hiringManager ||
-                      adminDocument.defaults.hiringManager;
-
-                    return {
-                      ...currentGenerateForm,
-                      hiringManager: nextHiringManager,
-                      salutation: syncGenerateSalutation(
-                        currentGenerateForm.salutation,
-                        currentGenerateForm.hiringManager,
-                        nextHiringManager,
-                        adminDocument.defaults.hiringManager,
-                      ),
-                      title:
-                        currentGenerateForm.title ||
-                        adminDocument.defaults.title,
-                    };
-                  },
-                );
-                setIsGenerateDialogOpen(true);
-              }}
-            >
-              <FileText data-icon="inline-start" />
-              Generate PDF
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </header>
 
         {connectionWarning ? (
@@ -588,7 +656,8 @@ export default function AdminPage() {
           </Alert>
         ) : null}
 
-        <div className="grid flex-1 gap-6 pb-6 xl:min-h-0 xl:grid-cols-[minmax(0,1.35fr)_24rem]">
+        <TabsContent value="dashboard" className="mt-0 flex-1">
+          <div className="grid flex-1 gap-6 pb-6 xl:min-h-0 xl:grid-cols-[minmax(0,1.35fr)_24rem]">
           <Card className="shadow-sm xl:min-h-0">
             <CardHeader>
               <CardTitle>Body Versions</CardTitle>
@@ -956,10 +1025,33 @@ export default function AdminPage() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        </div>
-      </div>
+          </div>
+        </TabsContent>
 
-      <Drawer.Root
+        <TabsContent value="logs" className="mt-0 flex-1">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Generated PDFs</CardTitle>
+              <CardDescription>
+                Browse, preview, and re-generate previously created cover
+                letters.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AdminLogsTable
+                errorMessage={generationLogsErrorMessage}
+                generationLogs={generationLogs}
+                isLoading={isLoadingGenerationLogs}
+                onGenerationLogsChanged={function handleGenerationLogsChanged() {
+                  void loadGenerationLogs();
+                }}
+                onOpenPreview={setBodyVersionPreviewUrl}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <Drawer.Root
         direction="right"
         open={isDrawerOpen}
         onOpenChange={function handleDrawerOpenChange(open) {
@@ -1326,6 +1418,7 @@ export default function AdminPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </Tabs>
     </div>
   );
 
@@ -1657,9 +1750,13 @@ export default function AdminPage() {
       drawerBodyVersion.id,
     );
     const previewVersionId = drawerBodyVersion.id || 'preview-draft';
-    const previewUrl = buildLetterPreviewUrl(
+    const previewUrl = buildCoverLetterPreviewUrl(
       previewAdminDocument,
-      previewVersionId,
+      {
+        hiringManager: previewAdminDocument.defaults.hiringManager,
+        title: previewAdminDocument.defaults.title,
+        versionId: previewVersionId,
+      },
       {
         embedded: true,
       },
@@ -1674,9 +1771,17 @@ export default function AdminPage() {
       return;
     }
 
-    const previewUrl = buildLetterPreviewUrl(adminDocument, bodyVersion.id, {
-      embedded: true,
-    });
+    const previewUrl = buildCoverLetterPreviewUrl(
+      adminDocument,
+      {
+        hiringManager: adminDocument.defaults.hiringManager,
+        title: adminDocument.defaults.title,
+        versionId: bodyVersion.id,
+      },
+      {
+        embedded: true,
+      },
+    );
 
     setErrorMessage('');
     setBodyVersionPreviewUrl(previewUrl);
@@ -1829,25 +1934,31 @@ export default function AdminPage() {
     setIsGenerating(true);
 
     try {
-      const pdf = await generateAdminPdf({
-        versionId: selectedBodyVersion.id,
-        company: generateForm.company,
-        hiringManager: generateForm.hiringManager || undefined,
-        role: generateForm.role,
-        salutation: shouldShowGenerateSalutationField(
-          generateForm.hiringManager,
-          adminDocument.defaults.hiringManager,
-        )
-          ? generateForm.salutation || undefined
-          : undefined,
-        title: generateForm.title || undefined,
-      });
+      const pdf = await generateAdminPdf(
+        {
+          versionId: selectedBodyVersion.id,
+          company: generateForm.company,
+          hiringManager: generateForm.hiringManager || undefined,
+          role: generateForm.role,
+          salutation: shouldShowGenerateSalutationField(
+            generateForm.hiringManager,
+            adminDocument.defaults.hiringManager,
+          )
+            ? generateForm.salutation || undefined
+            : undefined,
+          title: generateForm.title || undefined,
+        },
+        {
+          method: 'admin-ui',
+        },
+      );
 
       downloadBlob(
         pdf.blob,
         pdf.filename || buildFallbackFilename(selectedBodyVersion.slug),
       );
       setIsGenerateDialogOpen(false);
+      void loadGenerationLogs();
       toast(`Generated ${pdf.filename || 'cover letter PDF'}.`, {
         icon: successToastIcon,
       });
@@ -2181,34 +2292,6 @@ function downloadBlob(blob: Blob, filename: string) {
 
 function buildFallbackFilename(bodyVersionSlug: string) {
   return `cover-letter-${bodyVersionSlug}.pdf`;
-}
-
-function buildLetterPreviewUrl(
-  adminDocument: CoverLetterAdminDocument,
-  versionId: string,
-  options: {
-    embedded?: boolean;
-  } = {},
-) {
-  const previewRequest = getCoverLetterPreviewRequest({
-    hiringManager: adminDocument.defaults.hiringManager,
-    title: adminDocument.defaults.title,
-    versionId,
-  });
-  const searchParams = buildCoverLetterSearchParams(previewRequest);
-
-  searchParams.set(
-    'adminDocument',
-    serializeCoverLetterAdminDocument(adminDocument),
-  );
-
-  searchParams.set('mode', 'preview');
-
-  if (options.embedded) {
-    searchParams.set('previewHost', 'admin-overlay');
-  }
-
-  return `/letter?${searchParams.toString()}`;
 }
 
 function buildPreviewAdminDocument(

@@ -16,6 +16,15 @@ import {
   saveAdminDocument
 } from './admin-store.ts';
 import {
+  appendCoverLetterGenerationLogEntry,
+  findCoverLetterGenerationLogEntry,
+  getCoverLetterGenerationLogSummaries,
+} from './log-store.ts';
+import {
+  type CoverLetterGenerationMethod,
+  type CoverLetterGenerationLogEntry,
+} from '../src/admin/generation-logs.ts';
+import {
   type CoverLetterAdminDocument,
   type CoverLetterBodyVersion,
   buildCoverLetter,
@@ -48,7 +57,7 @@ app.use(function localDevelopmentCorsHandler(request, response, next) {
 
   if (origin && isAllowedDevelopmentOrigin(origin)) {
     response.header('Access-Control-Allow-Origin', origin);
-    response.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Coverfire-Key');
+    response.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Coverfire-Key, X-Coverfire-Method, X-Coverfire-Render-Origin');
     response.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.header('Access-Control-Expose-Headers', 'Content-Disposition');
     response.header('Vary', 'Origin');
@@ -76,6 +85,70 @@ app.get('/api/admin', async function adminHandler(_request, response, next) {
     const adminDocument = await getAdminDocument();
 
     response.json(adminDocument);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/logs', async function adminLogsHandler(_request, response, next) {
+  try {
+    const generationLogSummaries = await getCoverLetterGenerationLogSummaries();
+
+    response.json(generationLogSummaries);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/logs/:id', async function adminLogDetailHandler(request, response, next) {
+  try {
+    const generationLogEntry = await findCoverLetterGenerationLogEntry(request.params.id);
+
+    if (!generationLogEntry) {
+      response.status(404).json({
+        error: 'Generation log not found.'
+      });
+      return;
+    }
+
+    response.json(generationLogEntry);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/logs/:id/regenerate', async function regenerateAdminLogHandler(request, response, next) {
+  try {
+    const generationLogEntry = await findCoverLetterGenerationLogEntry(request.params.id);
+
+    if (!generationLogEntry) {
+      response.status(404).json({
+        error: 'Generation log not found.'
+      });
+      return;
+    }
+
+    const pdf = await renderCoverLetterPdf(
+      generationLogEntry.request,
+      generationLogEntry.adminDocument,
+      getRequestedRenderOrigin(request)
+    );
+    const filename = buildPdfFilename(generationLogEntry.request);
+
+    await appendCoverLetterGenerationLogEntry(
+      buildCoverLetterGenerationLogEntry(
+        generationLogEntry.request,
+        generationLogEntry.adminDocument,
+        {
+          filename,
+          method: {
+            kind: 'admin-ui'
+          }
+        }
+      )
+    );
+
+    sendPdfResponse(response, pdf, filename);
   } catch (error) {
     next(error);
   }
@@ -263,10 +336,16 @@ app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, 
       adminDocument,
       getRequestedRenderOrigin(request)
     );
+    const filename = buildPdfFilename(coverLetterRequest);
 
-    response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', `attachment; filename="${buildPdfFilename(coverLetterRequest)}"`);
-    response.send(pdf);
+    await appendCoverLetterGenerationLogEntry(
+      buildCoverLetterGenerationLogEntry(coverLetterRequest, adminDocument, {
+        filename,
+        method: getRequestedAdminGenerationMethod(request)
+      })
+    );
+
+    sendPdfResponse(response, pdf, filename);
   } catch (error) {
     next(error);
   }
@@ -296,10 +375,16 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
 
     const adminDocument = await getAdminDocument();
     const pdf = await renderCoverLetterPdf(coverLetterRequest, adminDocument);
+    const filename = buildPdfFilename(coverLetterRequest);
 
-    response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', `attachment; filename="${buildPdfFilename(coverLetterRequest)}"`);
-    response.send(pdf);
+    await appendCoverLetterGenerationLogEntry(
+      buildCoverLetterGenerationLogEntry(coverLetterRequest, adminDocument, {
+        filename,
+        method: getRequestedApiGenerationMethod(request)
+      })
+    );
+
+    sendPdfResponse(response, pdf, filename);
   } catch (error) {
     next(error);
   }
@@ -476,7 +561,8 @@ async function waitForCoverLetterFonts(page: Page) {
     `, {
       timeout: 5000
     });
-  } catch (_error) {
+  } catch {
+    return;
   }
 }
 
@@ -555,6 +641,33 @@ function getRequestedRenderOrigin(request: express.Request) {
   }
 
   return isAllowedDevelopmentOrigin(requestedRenderOrigin) ? requestedRenderOrigin : null;
+}
+
+function getRequestedAdminGenerationMethod(request: express.Request): CoverLetterGenerationMethod {
+  return request.header('x-coverfire-method') === 'admin-preview'
+    ? {
+        kind: 'admin-preview'
+      }
+    : {
+        kind: 'admin-ui'
+      };
+}
+
+function getRequestedApiGenerationMethod(request: express.Request): CoverLetterGenerationMethod {
+  const requestedMethodDetail = normalizeRequestedGenerationMethodDetail(
+    request.header('x-coverfire-method')
+  );
+
+  if (!requestedMethodDetail) {
+    return {
+      kind: 'api'
+    };
+  }
+
+  return {
+    detail: requestedMethodDetail,
+    kind: 'api'
+  };
 }
 
 function ensureApiKeyConfiguration() {
@@ -684,6 +797,33 @@ function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetter
   ].join('-') + '.pdf';
 }
 
+function buildCoverLetterGenerationLogEntry(
+  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
+  adminDocument: CoverLetterAdminDocument,
+  options: {
+    filename: string;
+    method: CoverLetterGenerationMethod;
+  }
+): CoverLetterGenerationLogEntry {
+  const resolvedCoverLetter = buildCoverLetter(coverLetterRequest, adminDocument);
+
+  return {
+    adminDocument,
+    createdAt: new Date().toISOString(),
+    filename: options.filename,
+    id: crypto.randomUUID(),
+    method: options.method,
+    request: {
+      company: resolvedCoverLetter.recipient.company,
+      hiringManager: resolvedCoverLetter.recipient.hiringManager,
+      role: resolvedCoverLetter.recipient.role,
+      salutation: coverLetterRequest.salutation,
+      title: resolvedCoverLetter.signature.title,
+      versionId: resolvedCoverLetter.bodyVersion.id
+    }
+  };
+}
+
 function parsePort(portValue: string | undefined) {
   if (!portValue) {
     return 3000;
@@ -758,6 +898,24 @@ function formatFilenameDate() {
   }
 
   return `${year}-${day}-${month}`;
+}
+
+function normalizeRequestedGenerationMethodDetail(methodDetail: string | undefined) {
+  if (!methodDetail) {
+    return '';
+  }
+
+  return methodDetail.trim();
+}
+
+function sendPdfResponse(
+  response: express.Response,
+  pdf: Uint8Array,
+  filename: string
+) {
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  response.send(pdf);
 }
 
 function getBodyVersionById(adminDocument: CoverLetterAdminDocument, bodyVersionId: string) {
