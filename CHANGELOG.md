@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-06-18
+
+### Added
+
+- Add a live `/letter` preview mode with a right-side generate drawer for editing request values and generating PDFs from the preview
+- Add in-page body-version previews from the admin editor and body-version card menu
+- Add local DIN font assets for more reliable cover-letter rendering
+- Add Sonner toast support for admin and preview feedback
+
+### Changed
+
+- Replace Base UI components with Radix-backed shadcn/ui primitives
+- Update body-version preview behavior to stay inside the admin UI instead of opening new tabs
+- Update preview controls so the back-to-admin action and generate/close controls are visually separated
+
+### Fixed
+
+- Prevent blank draft body versions from rendering empty paragraph space in the preview
+- Preserve Adobe Typekit font loading during Puppeteer PDF generation by scoping internal auth headers to same-origin requests
+- Add explicit PDF links for linkable signature and footer contact fields, including website, LinkedIn, GitHub, email, and phone values
+- Validate generate actions so placeholder role and company values cannot accidentally be used for generated PDFs
+
 ## [1.1.2] - 2026-06-16
 
 ### Added

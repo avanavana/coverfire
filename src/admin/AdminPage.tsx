@@ -13,8 +13,8 @@ import {
   Check,
   CircleAlert,
   Copy,
-  Download,
   Eye,
+  FileText,
   LoaderCircle,
   MoreVertical,
   Pencil,
@@ -87,6 +87,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   buildCoverLetterSearchParams,
+  getCoverLetterGenerationValidationMessage,
   getCoverLetterPreviewRequest,
   serializeCoverLetterAdminDocument,
 } from '@/cover-letter';
@@ -150,6 +151,7 @@ export default function AdminPage() {
     useState<BodyVersionDraft | null>(null);
   const [pendingDeleteBodyVersionId, setPendingDeleteBodyVersionId] =
     useState('');
+  const [bodyVersionPreviewUrl, setBodyVersionPreviewUrl] = useState('');
   const [generateForm, setGenerateForm] = useState<GenerateFormState>(
     createInitialGenerateFormState,
   );
@@ -157,7 +159,6 @@ export default function AdminPage() {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPreviewingBodyVersion, setIsPreviewingBodyVersion] = useState(false);
   const [isRetryingAdminDocument, setIsRetryingAdminDocument] = useState(false);
   const [isSavingBodyVersion, setIsSavingBodyVersion] = useState(false);
   const [isSavingSignatureFields, setIsSavingSignatureFields] = useState(false);
@@ -310,6 +311,23 @@ export default function AdminPage() {
     },
     [drawerBodyVersion],
   );
+
+  useEffect(function closeBodyVersionPreviewFromFrame() {
+    function handlePreviewMessage(event: MessageEvent) {
+      if (
+        event.origin === window.location.origin
+        && event.data === 'coverfire:close-preview'
+      ) {
+        setBodyVersionPreviewUrl('');
+      }
+    }
+
+    window.addEventListener('message', handlePreviewMessage);
+
+    return function cleanupPreviewMessageListener() {
+      window.removeEventListener('message', handlePreviewMessage);
+    };
+  }, []);
 
   useEffect(
     function syncLatestPersistedDocumentJsonRef() {
@@ -520,7 +538,7 @@ export default function AdminPage() {
                 setIsGenerateDialogOpen(true);
               }}
             >
-              <Download data-icon="inline-start" />
+              <FileText data-icon="inline-start" />
               Generate PDF
             </Button>
           </div>
@@ -685,7 +703,7 @@ export default function AdminPage() {
                                     event,
                                   ) {
                                     event.stopPropagation();
-                                    void previewSavedBodyVersion(bodyVersion);
+                                    previewSavedBodyVersion(bodyVersion);
                                   }}
                                 >
                                   <Eye />
@@ -779,8 +797,9 @@ export default function AdminPage() {
           </Card>
 
           <Accordion
-            defaultValue={['signature']}
-            multiple={false}
+            type="single"
+            collapsible
+            defaultValue="signature"
             className="flex w-full flex-col gap-6 self-start"
           >
             <AccordionItem
@@ -1001,16 +1020,11 @@ export default function AdminPage() {
                       variant="outline"
                       size="icon"
                       aria-label="Preview letter"
-                      disabled={isPreviewingBodyVersion}
                       onClick={function handlePreviewButtonClick() {
-                        void previewBodyVersionDraft();
+                        previewBodyVersionDraft();
                       }}
                     >
-                      {isPreviewingBodyVersion ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <Eye />
-                      )}
+                      <Eye />
                     </Button>
                   </div>
                 </div>
@@ -1158,6 +1172,34 @@ export default function AdminPage() {
       </Drawer.Root>
 
       <Dialog
+        open={Boolean(bodyVersionPreviewUrl)}
+        onOpenChange={function handlePreviewDialogOpenChange(open) {
+          if (!open) {
+            setBodyVersionPreviewUrl('');
+          }
+        }}
+      >
+        <DialogContent
+          className="h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden p-0 sm:max-w-none"
+          showCloseButton={false}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Preview body version</DialogTitle>
+            <DialogDescription>
+              Preview the selected cover-letter body version.
+            </DialogDescription>
+          </DialogHeader>
+          {bodyVersionPreviewUrl ? (
+            <iframe
+              className="h-full w-full border-0"
+              src={bodyVersionPreviewUrl}
+              title="Body version preview"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={isGenerateDialogOpen}
         onOpenChange={setIsGenerateDialogOpen}
       >
@@ -1244,7 +1286,7 @@ export default function AdminPage() {
                   data-icon="inline-start"
                 />
               ) : (
-                <Download data-icon="inline-start" />
+                <FileText data-icon="inline-start" />
               )}
               Generate PDF
             </Button>
@@ -1603,12 +1645,12 @@ export default function AdminPage() {
     }
   }
 
-  async function previewBodyVersionDraft() {
+  function previewBodyVersionDraft() {
     if (!adminDocument || !drawerBodyVersion) {
       return;
     }
 
-    const input = sanitizeBodyVersionDraft(drawerBodyVersion);
+    const input = sanitizeBodyVersionDraftForPreview(drawerBodyVersion);
     const previewAdminDocument = buildPreviewAdminDocument(
       adminDocument,
       input,
@@ -1618,50 +1660,26 @@ export default function AdminPage() {
     const previewUrl = buildLetterPreviewUrl(
       previewAdminDocument,
       previewVersionId,
+      {
+        embedded: true,
+      },
     );
-    const previewWindow = window.open(previewUrl, '_blank');
-
-    if (!previewWindow) {
-      setErrorMessage('Unable to open a preview tab.');
-      return;
-    }
 
     setErrorMessage('');
-    setIsPreviewingBodyVersion(true);
-
-    try {
-      toast('Preview opened in a new tab.', {
-        icon: successToastIcon,
-      });
-    } finally {
-      previewWindow.focus();
-      setIsPreviewingBodyVersion(false);
-    }
+    setBodyVersionPreviewUrl(previewUrl);
   }
 
-  async function previewSavedBodyVersion(bodyVersion: CoverLetterBodyVersion) {
+  function previewSavedBodyVersion(bodyVersion: CoverLetterBodyVersion) {
     if (!adminDocument) {
       return;
     }
 
-    const previewUrl = buildLetterPreviewUrl(adminDocument, bodyVersion.id);
-    const previewWindow = window.open(previewUrl, '_blank');
-
-    if (!previewWindow) {
-      setErrorMessage('Unable to open a preview tab.');
-      return;
-    }
+    const previewUrl = buildLetterPreviewUrl(adminDocument, bodyVersion.id, {
+      embedded: true,
+    });
 
     setErrorMessage('');
-
-    try {
-      toast('Preview opened in a new tab.', {
-        icon: successToastIcon,
-      });
-      previewWindow.focus();
-    } catch {
-      setErrorMessage('Unable to open a preview tab.');
-    }
+    setBodyVersionPreviewUrl(previewUrl);
   }
 
   async function handleDuplicate(
@@ -1783,17 +1801,27 @@ export default function AdminPage() {
 
   async function handleGenerate() {
     if (!adminDocument) {
-      setErrorMessage('Admin document is unavailable.');
+      toast.error('Admin document is unavailable.');
       return;
     }
 
     if (!selectedBodyVersion) {
-      setErrorMessage('Select a body version first.');
+      toast.error('Select a body version first.');
       return;
     }
 
     if (!generateForm.role.trim() || !generateForm.company.trim()) {
-      setErrorMessage('Role and company are required.');
+      toast.error('Role and company are required.');
+      return;
+    }
+
+    const validationMessage = getCoverLetterGenerationValidationMessage({
+      role: generateForm.role,
+      company: generateForm.company,
+    });
+
+    if (validationMessage) {
+      toast.error(validationMessage);
       return;
     }
 
@@ -1824,7 +1852,7 @@ export default function AdminPage() {
         icon: successToastIcon,
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      toast.error(getErrorMessage(error));
     } finally {
       setIsGenerating(false);
     }
@@ -1999,6 +2027,20 @@ function sanitizeBodyVersionDraft(
   };
 }
 
+function sanitizeBodyVersionDraftForPreview(
+  bodyVersionDraft: BodyVersionDraft,
+): AdminBodyVersionInput {
+  const input = sanitizeBodyVersionDraft(bodyVersionDraft);
+
+  return {
+    body: input.body || '\u200B',
+    greeting: input.greeting || '\u200B',
+    name: input.name || 'Untitled preview',
+    signOff: input.signOff || '\u200B',
+    slug: input.slug || 'preview-draft',
+  };
+}
+
 function upsertBodyVersion(
   adminDocument: CoverLetterAdminDocument,
   bodyVersion: CoverLetterBodyVersion,
@@ -2144,6 +2186,9 @@ function buildFallbackFilename(bodyVersionSlug: string) {
 function buildLetterPreviewUrl(
   adminDocument: CoverLetterAdminDocument,
   versionId: string,
+  options: {
+    embedded?: boolean;
+  } = {},
 ) {
   const previewRequest = getCoverLetterPreviewRequest({
     hiringManager: adminDocument.defaults.hiringManager,
@@ -2157,7 +2202,13 @@ function buildLetterPreviewUrl(
     serializeCoverLetterAdminDocument(adminDocument),
   );
 
-  return `/admin/preview?${searchParams.toString()}`;
+  searchParams.set('mode', 'preview');
+
+  if (options.embedded) {
+    searchParams.set('previewHost', 'admin-overlay');
+  }
+
+  return `/letter?${searchParams.toString()}`;
 }
 
 function buildPreviewAdminDocument(

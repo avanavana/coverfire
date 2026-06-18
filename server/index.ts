@@ -20,6 +20,7 @@ import {
   type CoverLetterBodyVersion,
   buildCoverLetter,
   buildCoverLetterSearchParams,
+  getCoverLetterGenerationValidationMessage,
   parseCoverLetterRequest,
   serializeCoverLetterAdminDocument,
 } from '../src/cover-letter/index.ts';
@@ -27,6 +28,7 @@ import {
 const host = process.env.HOST || '0.0.0.0';
 const port = parsePort(process.env.PORT);
 const apiKey = process.env.COVERFIRE_API_KEY;
+const adminBasicAuthEnabledEnvironmentVariable = process.env.ADMIN_BASIC_AUTH_ENABLED;
 const adminBasicAuthUsername = process.env.ADMIN_BASIC_AUTH_USERNAME;
 const adminBasicAuthPassword = process.env.ADMIN_BASIC_AUTH_PASSWORD;
 const adminBasicAuthRealm = process.env.ADMIN_BASIC_AUTH_REALM || 'Coverfire Admin';
@@ -241,6 +243,16 @@ app.post('/api/admin/body/:id/default', async function defaultAdminBodyHandler(r
 app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, response, next) {
   try {
     const coverLetterRequest = parseCoverLetterRequest(request.body);
+    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+
+    if (validationMessage) {
+      response.status(400).json({
+        error: 'Invalid cover letter request',
+        message: validationMessage
+      });
+      return;
+    }
+
     const adminDocument = applyPreviewBodyVersion(
       await getAdminDocument(),
       request.body.previewBodyVersionId,
@@ -272,6 +284,16 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
     }
 
     const coverLetterRequest = parseCoverLetterRequest(request.body);
+    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+
+    if (validationMessage) {
+      response.status(400).json({
+        error: 'Invalid cover letter request',
+        message: validationMessage
+      });
+      return;
+    }
+
     const adminDocument = await getAdminDocument();
     const pdf = await renderCoverLetterPdf(coverLetterRequest, adminDocument);
 
@@ -283,12 +305,30 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
   }
 });
 
+app.use('/letter', function previewLetterAuthHandler(request, response, next) {
+  if (request.query.mode !== 'preview') {
+    next();
+    return;
+  }
+
+  if (isAuthorizedRequest(request.header('x-coverfire-key'))) {
+    next();
+    return;
+  }
+
+  adminBasicAuthMiddleware(request, response, next);
+});
+
 if (hasBuiltClient) {
   app.use(express.static(distPath));
 }
 
 app.get('/{*path}', function appRouteHandler(_request, response) {
-  if (_request.path.startsWith('/letter') && !isAuthorizedRequest(_request.header('x-coverfire-key'))) {
+  if (
+    _request.path.startsWith('/letter')
+    && _request.query.mode !== 'preview'
+    && !isAuthorizedRequest(_request.header('x-coverfire-key'))
+  ) {
     response.status(404).type('text/plain').send('Not found');
     return;
   }
@@ -365,14 +405,10 @@ async function renderCoverLetterPdf(
     const page = await browser.newPage();
     const renderUrl = buildRenderUrl(coverLetterRequest, adminDocument, renderOriginOverride);
 
-    if (apiKey) {
-      await page.setExtraHTTPHeaders({
-        'x-coverfire-key': apiKey
-      });
-    }
+    await configureRenderRequestAuthentication(page, renderUrl);
 
     await gotoRenderUrl(page, renderUrl);
-    await page.evaluateHandle('document.fonts.ready');
+    await waitForCoverLetterFonts(page);
 
     return await page.pdf({
       format: 'Letter',
@@ -383,6 +419,36 @@ async function renderCoverLetterPdf(
   } finally {
     await browser.close();
   }
+}
+
+async function configureRenderRequestAuthentication(page: Page, renderUrl: string) {
+  if (!apiKey) {
+    return;
+  }
+
+  const renderOrigin = new URL(renderUrl).origin;
+
+  await page.setRequestInterception(true);
+  page.on('request', function handleRenderRequest(request) {
+    const requestHeaders = request.headers();
+    const requestOrigin = new URL(request.url()).origin;
+
+    if (requestOrigin !== renderOrigin) {
+      request.continue({
+        headers: omitHeader(requestHeaders, 'x-coverfire-key')
+      }).catch(function ignoreRequestContinueError() {
+      });
+      return;
+    }
+
+    request.continue({
+      headers: {
+        ...requestHeaders,
+        'x-coverfire-key': apiKey
+      }
+    }).catch(function ignoreRequestContinueError() {
+    });
+  });
 }
 
 async function gotoRenderUrl(page: Page, renderUrl: string) {
@@ -396,6 +462,21 @@ async function gotoRenderUrl(page: Page, renderUrl: string) {
     }
 
     await page.goto(fallbackRenderUrl, { waitUntil: 'networkidle0' });
+  }
+}
+
+async function waitForCoverLetterFonts(page: Page) {
+  await page.evaluateHandle('document.fonts.ready');
+
+  try {
+    await page.waitForFunction(function hasLoadedDinFaces() {
+      return Array.from(document.fonts).some(function isLoadedDinFace(fontFace) {
+        return fontFace.family === 'din-2014' && fontFace.status === 'loaded';
+      });
+    }, {
+      timeout: 5000
+    });
+  } catch (_error) {
   }
 }
 
@@ -422,6 +503,7 @@ function buildRenderUrl(
     title: resolvedCoverLetter.signature.title,
     versionId: resolvedCoverLetter.bodyVersion.id
   }).toString();
+  renderUrl.searchParams.set('mode', 'print');
   renderUrl.searchParams.set('adminDocument', adminDocumentJson);
 
   return renderUrl.toString();
@@ -437,6 +519,16 @@ function getRenderOrigin() {
   }
 
   return null;
+}
+
+function omitHeader(headers: Record<string, string>, headerName: string) {
+  const normalizedHeaderName = headerName.toLowerCase();
+
+  return Object.fromEntries(
+    Object.entries(headers).filter(function filterHeader([ key ]) {
+      return key.toLowerCase() !== normalizedHeaderName;
+    })
+  );
 }
 
 function getLocalRenderUrlFallback(renderUrl: string) {
@@ -476,7 +568,7 @@ function adminBasicAuthMiddleware(
   response: express.Response,
   next: express.NextFunction
 ) {
-  if (!isAdminBasicAuthEnabled()) {
+  if (!isAdminBasicAuthEnabled(request)) {
     next();
     return;
   }
@@ -506,7 +598,23 @@ function validateAdminBasicAuthConfiguration() {
   );
 }
 
-function isAdminBasicAuthEnabled() {
+function isAdminBasicAuthEnabled(request: express.Request) {
+  const explicitlyConfiguredAdminBasicAuthEnabled = parseOptionalBoolean(
+    adminBasicAuthEnabledEnvironmentVariable
+  );
+
+  if (typeof explicitlyConfiguredAdminBasicAuthEnabled === 'boolean') {
+    return explicitlyConfiguredAdminBasicAuthEnabled
+      && typeof adminBasicAuthUsername === 'string'
+      && adminBasicAuthUsername.length > 0
+      && typeof adminBasicAuthPassword === 'string'
+      && adminBasicAuthPassword.length > 0;
+  }
+
+  if (isLocalAdminRequest(request)) {
+    return false;
+  }
+
   return typeof adminBasicAuthUsername === 'string'
     && adminBasicAuthUsername.length > 0
     && typeof adminBasicAuthPassword === 'string'
@@ -588,6 +696,32 @@ function parsePort(portValue: string | undefined) {
   }
 
   return parsedPort;
+}
+
+function parseOptionalBoolean(value: string | undefined) {
+  if (typeof value !== 'string' || value.length === 0) {
+    return null;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  throw new Error(
+    'Invalid `ADMIN_BASIC_AUTH_ENABLED` value. Expected `true` or `false`.'
+  );
+}
+
+function isLocalAdminRequest(request: express.Request) {
+  const requestHostname = request.hostname.toLowerCase();
+
+  return requestHostname === 'localhost'
+    || requestHostname === '127.0.0.1'
+    || requestHostname === '::1';
 }
 
 function isAllowedDevelopmentOrigin(origin: string) {

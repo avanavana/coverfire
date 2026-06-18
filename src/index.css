@@ -115,6 +115,41 @@ p {
   color: var(--text);
 }
 
+.preview-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  background: oklch(0.965 0 0);
+}
+
+.preview-actions {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preview-back-button {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 10;
+  background: color-mix(in oklab, white 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.preview-shell .page {
+  flex-shrink: 0;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.12),
+    0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
 .cover-letter-root strong {
   font-size: 9pt;
   font-weight: 700;
@@ -143,6 +178,27 @@ p {
 @layer components {
   .page {
     @apply w-letter-width max-w-letter-width h-letter-height max-h-letter-height p-letter pb-0 box-border bg-page break-after-page flex flex-col;
+  }
+}
+
+@media print {
+  .preview-shell {
+    display: block;
+    min-height: auto;
+    padding: 0;
+    background: transparent;
+  }
+
+  .preview-actions {
+    display: none;
+  }
+
+  .preview-back-button {
+    display: none;
+  }
+
+  .preview-shell .page {
+    box-shadow: none;
   }
 }
 

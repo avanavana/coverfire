@@ -408,6 +408,27 @@ export function parseCoverLetterRequest(input: unknown): CoverLetterRequest {
   return coverLetterRequestSchema.parse(normalizeCoverLetterRequest(input));
 }
 
+export function getCoverLetterGenerationValidationMessage(
+  request: Pick<CoverLetterRequest, 'role' | 'company'>
+) {
+  const hasPlaceholderRole = request.role.trim() === coverLetterPreviewRequest.role;
+  const hasPlaceholderCompany = request.company.trim() === coverLetterPreviewRequest.company;
+
+  if (hasPlaceholderRole && hasPlaceholderCompany) {
+    return 'Replace the placeholder role and company before generating the PDF.';
+  }
+
+  if (hasPlaceholderRole) {
+    return 'Replace the placeholder role before generating the PDF.';
+  }
+
+  if (hasPlaceholderCompany) {
+    return 'Replace the placeholder company before generating the PDF.';
+  }
+
+  return '';
+}
+
 export function buildCoverLetterSearchParams(request: Partial<CoverLetterRequest>): URLSearchParams {
   const searchParams = new URLSearchParams();
   const normalizedRequest = normalizeCoverLetterRequest(request);
