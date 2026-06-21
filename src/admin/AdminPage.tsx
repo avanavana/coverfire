@@ -1402,13 +1402,8 @@ export default function AdminPage() {
           }
         >
           <DialogHeader>
-            <DialogTitle
-              asChild
-              className="text-2xl leading-tight font-semibold tracking-tight"
-            >
-              <h1>
-                Generate cover letter
-              </h1>
+            <DialogTitle className="text-2xl leading-tight font-semibold tracking-tight">
+              Generate cover letter
             </DialogTitle>
             <DialogDescription>
               Fill in the recipient fields and generate a PDF or copy plain text.
@@ -1476,7 +1471,7 @@ export default function AdminPage() {
               />
             </LabeledField>
           </div>
-          <DialogFooter className="-mx-6 -mb-6 px-6 py-2">
+          <DialogFooter className="-mx-6 -mb-6 px-6 py-4">
             <Button
               variant="outline"
               onClick={function handleCloseGenerateDialog() {
