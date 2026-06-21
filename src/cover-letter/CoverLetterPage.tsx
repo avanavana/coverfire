@@ -5,12 +5,12 @@ import {
   useState,
 } from 'react';
 
-import { ArrowLeft, Check, FileText, LoaderCircle, X } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardType, FileText, LoaderCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Drawer } from 'vaul';
 
 import logo from '@/assets/logo.svg';
-import { generateAdminPdf } from '@/admin/api';
+import { generateAdminPdf, generateAdminText } from '@/admin/api';
 import { buttonVariants, Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,6 @@ import {
   createDefaultCoverLetterAdminDocument,
   getCoverLetterAdminDocumentOverride,
   getCoverLetterGenerationValidationMessage,
-  getCoverLetterPreviewRequest,
   getCoverLetterRequestOverrides,
   serializeCoverLetterAdminDocument,
 } from '@/cover-letter';
@@ -59,12 +58,18 @@ const successToastIcon = <Check className="size-4" />;
 
 function getInitialPreviewContext(): PreviewContext {
   const searchParams = new URLSearchParams(window.location.search);
-  const previewRequest = getCoverLetterPreviewRequest(
-    getCoverLetterRequestOverrides(searchParams),
-  );
   const adminDocument =
     getCoverLetterAdminDocumentOverride(searchParams) ||
     createDefaultCoverLetterAdminDocument();
+  const previewRequestOverrides = getCoverLetterRequestOverrides(searchParams);
+  const previewRequest = {
+    company: previewRequestOverrides.company || '',
+    hiringManager: previewRequestOverrides.hiringManager,
+    role: previewRequestOverrides.role || '',
+    salutation: previewRequestOverrides.salutation,
+    templateId: previewRequestOverrides.templateId,
+    title: previewRequestOverrides.title,
+  };
 
   return {
     adminDocument,
@@ -113,6 +118,7 @@ export default function CoverLetterPage() {
   const [initialPreviewContext] = useState(getInitialPreviewContext);
   const [isGenerateDrawerOpen, setIsGenerateDrawerOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [previewGenerateForm, setPreviewGenerateForm] =
     useState<PreviewGenerateFormState>(function createInitialPreviewGenerateForm() {
       return createPreviewGenerateFormState(
@@ -145,6 +151,18 @@ export default function CoverLetterPage() {
     adminDocument.defaults.hiringManager,
   );
 
+  function closePreviewMode() {
+    if (!isEmbeddedPreview) {
+      window.location.href = '/admin';
+      return;
+    }
+
+    window.parent.postMessage(
+      'coverfire:close-preview',
+      window.location.origin,
+    );
+  }
+
   useEffect(
     function syncPreviewUrl() {
       if (!isPreviewMode) {
@@ -168,15 +186,45 @@ export default function CoverLetterPage() {
     [adminDocument, isEmbeddedPreview, isPreviewMode, resolvedPreviewRequest],
   );
 
-  async function handleGeneratePdf() {
-    if (
-      !resolvedPreviewRequest.role.trim() ||
-      !resolvedPreviewRequest.company.trim()
-    ) {
-      toast.error('Role and company are required.');
-      return;
-    }
+  useEffect(
+    function bindPreviewEscapeKey() {
+      if (!isPreviewMode) {
+        return;
+      }
 
+      function handleWindowKeyDown(event: KeyboardEvent) {
+        if (event.key !== 'Escape' || event.defaultPrevented) {
+          return;
+        }
+
+        event.preventDefault();
+
+        if (isGenerateDrawerOpen) {
+          setIsGenerateDrawerOpen(false);
+          return;
+        }
+
+        if (!isEmbeddedPreview) {
+          window.location.href = '/admin';
+          return;
+        }
+
+        window.parent.postMessage(
+          'coverfire:close-preview',
+          window.location.origin,
+        );
+      }
+
+      window.addEventListener('keydown', handleWindowKeyDown);
+
+      return function cleanupWindowKeyDownListener() {
+        window.removeEventListener('keydown', handleWindowKeyDown);
+      };
+    },
+    [isEmbeddedPreview, isGenerateDrawerOpen, isPreviewMode],
+  );
+
+  async function handleGeneratePdf() {
     const validationMessage =
       getCoverLetterGenerationValidationMessage(resolvedPreviewRequest);
 
@@ -207,6 +255,37 @@ export default function CoverLetterPage() {
       toast.error(getErrorMessage(error));
     } finally {
       setIsGeneratingPdf(false);
+    }
+  }
+
+  async function handleGenerateText() {
+    const validationMessage =
+      getCoverLetterGenerationValidationMessage(resolvedPreviewRequest);
+
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    setIsGeneratingText(true);
+
+    try {
+      const result = await generateAdminText(resolvedPreviewRequest, {
+        method: 'admin-preview',
+        previewBodyTemplate: selectedBodyTemplate
+          ? getPreviewBodyTemplateInput(selectedBodyTemplate)
+          : undefined,
+        previewBodyTemplateId: selectedBodyTemplate?.id,
+      });
+
+      await copyTextToClipboard(result.text);
+      toast('Copied cover letter text to the clipboard.', {
+        icon: successToastIcon,
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsGeneratingText(false);
     }
   }
 
@@ -253,10 +332,7 @@ export default function CoverLetterPage() {
               }
 
               event.preventDefault();
-              window.parent.postMessage(
-                'coverfire:close-preview',
-                window.location.origin,
-              );
+              closePreviewMode();
             }}
           >
             <ArrowLeft data-icon="inline-start" />
@@ -276,15 +352,7 @@ export default function CoverLetterPage() {
               variant="outline"
               size="icon"
               onClick={function handleClosePreviewClick() {
-                if (!isEmbeddedPreview) {
-                  window.location.href = '/admin';
-                  return;
-                }
-
-                window.parent.postMessage(
-                  'coverfire:close-preview',
-                  window.location.origin,
-                );
+                closePreviewMode();
               }}
             >
               <X />
@@ -304,13 +372,15 @@ export default function CoverLetterPage() {
                   Generate cover letter preview
                 </Drawer.Title>
                 <Drawer.Description className="sr-only">
-                  Configure the live cover letter preview and generate a PDF.
+                  Configure the live cover letter preview and generate a PDF or plain text.
                 </Drawer.Description>
                 <div className="flex items-center justify-between border-b px-6 py-4">
                   <div className="flex flex-col gap-1">
-                    <h2 className="text-lg font-semibold">Generate PDF</h2>
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                      Generate cover letter
+                    </h1>
                     <p className="text-sm text-muted-foreground">
-                      Update the live preview and press generate PDF when ready.
+                      Update the live preview, then generate a PDF or copy plain text.
                     </p>
                   </div>
                 </div>
@@ -323,7 +393,7 @@ export default function CoverLetterPage() {
                       data-vaul-no-drag
                       disabled
                       id="preview-body-template"
-                      value={selectedBodyTemplate.name}
+                      value={selectedBodyTemplate?.name || ''}
                     />
                   </LabeledField>
                   <LabeledField htmlFor="preview-title" label="Title">
@@ -400,10 +470,10 @@ export default function CoverLetterPage() {
                     />
                   </LabeledField>
                 </div>
-                <div data-vaul-no-drag className="border-t px-6 py-4">
+                <div data-vaul-no-drag className="grid gap-2 border-t px-6 py-4">
                   <Button
                     className="w-full"
-                    disabled={isGeneratingPdf}
+                    disabled={isGeneratingPdf || isGeneratingText}
                     onClick={function handleGeneratePdfClick() {
                       void handleGeneratePdf();
                     }}
@@ -417,6 +487,34 @@ export default function CoverLetterPage() {
                       <FileText data-icon="inline-start" />
                     )}
                     Generate PDF
+                  </Button>
+                  <Button
+                    className="w-full"
+                    disabled={isGeneratingPdf || isGeneratingText}
+                    variant="outline"
+                    onClick={function handleGenerateTextClick() {
+                      void handleGenerateText();
+                    }}
+                  >
+                    {isGeneratingText ? (
+                      <LoaderCircle
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
+                    ) : (
+                      <ClipboardType data-icon="inline-start" />
+                    )}
+                    Generate text
+                  </Button>
+                  <Button
+                    className="w-full"
+                    disabled={isGeneratingPdf || isGeneratingText}
+                    variant="outline"
+                    onClick={function handleCancelGenerateClick() {
+                      setIsGenerateDrawerOpen(false);
+                    }}
+                  >
+                    Cancel
                   </Button>
                 </div>
               </Drawer.Content>
@@ -433,7 +531,7 @@ export default function CoverLetterPage() {
           </section>
           <section
             id="address"
-            className="flex grow flex-col justify-center max-h-[var(--recipient-block-max-height)]"
+            className="flex grow flex-col justify-center max-h-(--recipient-block-max-height)"
           >
             <p>
               <strong>{previewCoverLetter.recipient.hiringManager}</strong>
@@ -720,6 +818,14 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(function revokeObjectUrl() {
     URL.revokeObjectURL(objectUrl);
   }, 1000);
+}
+
+async function copyTextToClipboard(text: string) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('Clipboard access is unavailable in this browser.');
+  }
+
+  await navigator.clipboard.writeText(text);
 }
 
 function getErrorMessage(error: unknown) {

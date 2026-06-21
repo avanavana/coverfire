@@ -1,6 +1,5 @@
 import {
   buildCoverLetterSearchParams,
-  getCoverLetterPreviewRequest,
   serializeCoverLetterAdminDocument,
 } from '../cover-letter/index.ts';
 
@@ -16,8 +15,7 @@ export function buildCoverLetterPreviewUrl(
     embedded?: boolean;
   } = {},
 ) {
-  const previewRequest = getCoverLetterPreviewRequest(request);
-  const searchParams = buildCoverLetterSearchParams(previewRequest);
+  const searchParams = buildCoverLetterSearchParams(request);
 
   searchParams.set(
     'adminDocument',

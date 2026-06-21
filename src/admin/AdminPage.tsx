@@ -12,6 +12,7 @@ import {
 import {
   Check,
   CircleAlert,
+  ClipboardType,
   Copy,
   Eye,
   FileText,
@@ -36,6 +37,7 @@ import {
   fetchAdminDocument,
   fetchCoverLetterGenerationLogs,
   generateAdminPdf,
+  generateAdminText,
   saveAdminDocument,
   setDefaultBodyTemplate,
   updateBodyTemplate,
@@ -167,7 +169,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [isLoadingGenerationLogs, setIsLoadingGenerationLogs] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetryingAdminDocument, setIsRetryingAdminDocument] = useState(false);
@@ -1275,7 +1278,7 @@ export default function AdminPage() {
         }}
       >
         <DialogContent
-          className="h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden p-0 sm:max-w-none"
+          className="h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden p-0 max-[895px]:top-0 max-[895px]:left-0 max-[895px]:h-dvh max-[895px]:w-screen max-[895px]:max-w-none max-[895px]:translate-x-0 max-[895px]:translate-y-0 max-[895px]:rounded-none max-[895px]:overflow-auto max-[895px]:shadow-none sm:max-w-none"
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
@@ -1300,9 +1303,13 @@ export default function AdminPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Generate PDF</DialogTitle>
+            <DialogTitle asChild>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Generate cover letter
+              </h1>
+            </DialogTitle>
             <DialogDescription>
-              Fill in the recipient fields and generate a cover letter PDF.
+              Fill in the recipient fields and generate a PDF or copy plain text.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
@@ -1377,12 +1384,29 @@ export default function AdminPage() {
               Cancel
             </Button>
             <Button
-              disabled={isGenerating}
-              onClick={function handleGenerateButtonClick() {
-                void handleGenerate();
+              disabled={isGeneratingPdf || isGeneratingText}
+              variant="outline"
+              onClick={function handleGenerateTextButtonClick() {
+                void handleGenerateText();
               }}
             >
-              {isGenerating ? (
+              {isGeneratingText ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <ClipboardType data-icon="inline-start" />
+              )}
+              Generate text
+            </Button>
+            <Button
+              disabled={isGeneratingPdf || isGeneratingText}
+              onClick={function handleGenerateButtonClick() {
+                void handleGeneratePdf();
+              }}
+            >
+              {isGeneratingPdf ? (
                 <LoaderCircle
                   className="animate-spin"
                   data-icon="inline-start"
@@ -1914,7 +1938,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handleGenerate() {
+  async function handleGeneratePdf() {
     if (!adminDocument) {
       toast.error('Admin document is unavailable.');
       return;
@@ -1922,11 +1946,6 @@ export default function AdminPage() {
 
     if (!selectedBodyTemplate) {
       toast.error('Select a body template first.');
-      return;
-    }
-
-    if (!generateForm.role.trim() || !generateForm.company.trim()) {
-      toast.error('Role and company are required.');
       return;
     }
 
@@ -1941,7 +1960,7 @@ export default function AdminPage() {
     }
 
     setErrorMessage('');
-    setIsGenerating(true);
+    setIsGeneratingPdf(true);
 
     try {
       const pdf = await generateAdminPdf(
@@ -1975,7 +1994,63 @@ export default function AdminPage() {
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingPdf(false);
+    }
+  }
+
+  async function handleGenerateText() {
+    if (!adminDocument) {
+      toast.error('Admin document is unavailable.');
+      return;
+    }
+
+    if (!selectedBodyTemplate) {
+      toast.error('Select a body template first.');
+      return;
+    }
+
+    const validationMessage = getCoverLetterGenerationValidationMessage({
+      role: generateForm.role,
+      company: generateForm.company,
+    });
+
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    setErrorMessage('');
+    setIsGeneratingText(true);
+
+    try {
+      const result = await generateAdminText(
+        {
+          templateId: selectedBodyTemplate.id,
+          company: generateForm.company,
+          hiringManager: generateForm.hiringManager || undefined,
+          role: generateForm.role,
+          salutation: shouldShowGenerateSalutationField(
+            generateForm.hiringManager,
+            adminDocument.defaults.hiringManager,
+          )
+            ? generateForm.salutation || undefined
+            : undefined,
+          title: generateForm.title || undefined,
+        },
+        {
+          method: 'admin-ui',
+        },
+      );
+
+      await copyTextToClipboard(result.text);
+      setIsGenerateDialogOpen(false);
+      toast('Copied cover letter text to the clipboard.', {
+        icon: successToastIcon,
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsGeneratingText(false);
     }
   }
 }
@@ -2298,6 +2373,14 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(function revokeObjectUrl() {
     URL.revokeObjectURL(objectUrl);
   }, 1000);
+}
+
+async function copyTextToClipboard(text: string) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('Clipboard access is unavailable in this browser.');
+  }
+
+  await navigator.clipboard.writeText(text);
 }
 
 function buildFallbackFilename(bodyTemplateSlug: string) {
