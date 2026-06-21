@@ -28,6 +28,7 @@ import {
   type CoverLetterAdminDocument,
   type CoverLetterBodyTemplate,
   buildCoverLetter,
+  buildCoverLetterText,
   buildCoverLetterSearchParams,
   getCoverLetterGenerationValidationMessage,
   parseCoverLetterRequest,
@@ -350,6 +351,33 @@ app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, 
   }
 });
 
+app.post('/api/admin/generate-text', async function adminGenerateTextHandler(request, response, next) {
+  try {
+    const coverLetterRequest = parseCoverLetterRequest(request.body);
+    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+
+    if (validationMessage) {
+      response.status(400).json({
+        error: 'Invalid cover letter request',
+        message: validationMessage
+      });
+      return;
+    }
+
+    const adminDocument = applyPreviewBodyTemplate(
+      await getAdminDocument(),
+      request.body.previewBodyTemplateId,
+      request.body.previewBodyTemplate
+    );
+    const text = buildCoverLetterText(coverLetterRequest, adminDocument);
+    const filename = buildTextFilename(coverLetterRequest);
+
+    sendTextResponse(response, text, filename);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
     ensureApiKeyConfiguration();
@@ -384,6 +412,38 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
     );
 
     sendPdfResponse(response, pdf, filename);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/text', async function coverLetterTextHandler(request, response, next) {
+  try {
+    ensureApiKeyConfiguration();
+
+    if (!isAuthorizedRequest(request.header('x-coverfire-key'))) {
+      response.status(401).json({
+        error: 'Unauthorized'
+      });
+      return;
+    }
+
+    const coverLetterRequest = parseCoverLetterRequest(request.body);
+    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+
+    if (validationMessage) {
+      response.status(400).json({
+        error: 'Invalid cover letter request',
+        message: validationMessage
+      });
+      return;
+    }
+
+    const adminDocument = await getAdminDocument();
+    const text = buildCoverLetterText(coverLetterRequest, adminDocument);
+    const filename = buildTextFilename(coverLetterRequest);
+
+    sendTextResponse(response, text, filename);
   } catch (error) {
     next(error);
   }
@@ -796,6 +856,16 @@ function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetter
   ].join('-') + '.pdf';
 }
 
+function buildTextFilename(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+  return [
+    'avana_vana',
+    slugifyFilenamePart(coverLetterRequest.role),
+    'cover_letter',
+    slugifyFilenamePart(coverLetterRequest.company),
+    formatFilenameDate()
+  ].join('-') + '.txt';
+}
+
 function buildCoverLetterGenerationLogEntry(
   coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
   adminDocument: CoverLetterAdminDocument,
@@ -916,6 +986,16 @@ function sendPdfResponse(
   response.setHeader('Content-Type', 'application/pdf');
   response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   response.send(pdf);
+}
+
+function sendTextResponse(
+  response: express.Response,
+  text: string,
+  filename: string
+) {
+  response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  response.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  response.send(text);
 }
 
 function getBodyTemplateById(adminDocument: CoverLetterAdminDocument, bodyTemplateId: string) {

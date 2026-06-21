@@ -416,19 +416,19 @@ export function parseCoverLetterRequest(input: unknown): CoverLetterRequest {
 export function getCoverLetterGenerationValidationMessage(
   request: Pick<CoverLetterRequest, 'role' | 'company'>
 ) {
-  const hasPlaceholderRole = request.role.trim() === coverLetterPreviewRequest.role;
-  const hasPlaceholderCompany = request.company.trim() === coverLetterPreviewRequest.company;
+  const role = request.role.trim();
+  const company = request.company.trim();
 
-  if (hasPlaceholderRole && hasPlaceholderCompany) {
-    return 'Replace the placeholder role and company before generating the PDF.';
+  if (!role && !company) {
+    return 'Role and company cannot be empty.';
   }
 
-  if (hasPlaceholderRole) {
-    return 'Replace the placeholder role before generating the PDF.';
+  if (!role) {
+    return 'Role cannot be empty.';
   }
 
-  if (hasPlaceholderCompany) {
-    return 'Replace the placeholder company before generating the PDF.';
+  if (!company) {
+    return 'Company cannot be empty.';
   }
 
   return '';
@@ -583,19 +583,21 @@ export function buildCoverLetter(
   const salutation = request.salutation;
   const title = request.title || adminDocument.defaults.title;
   const bodyTemplate = getBodyTemplate(adminDocument, request.templateId);
+  const resolvedRole = request.role.trim() || '{{role}}';
+  const resolvedCompany = request.company.trim() || '{{company}}';
   const templateValues = {
     hiringManager,
     title,
-    role: request.role,
-    company: request.company
+    role: resolvedRole,
+    company: resolvedCompany
   };
 
   return {
     date: formatLetterDate(),
     recipient: {
       hiringManager,
-      role: request.role,
-      company: request.company
+      role: resolvedRole,
+      company: resolvedCompany
     },
     bodyTemplate: {
       id: bodyTemplate.id,
@@ -622,6 +624,18 @@ export function buildCoverLetter(
       contacts: getOrderedContacts(adminDocument, 'footer')
     }
   };
+}
+
+export function buildCoverLetterText(
+  request: CoverLetterRequest = coverLetterPreviewRequest,
+  adminDocument: CoverLetterAdminDocument = createDefaultCoverLetterAdminDocument()
+) {
+  const coverLetter = buildCoverLetter(request, adminDocument);
+
+  return [
+    coverLetter.body.greeting,
+    ...coverLetter.body.paragraphs
+  ].join('\n\n');
 }
 
 function getBodyTemplate(

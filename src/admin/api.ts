@@ -128,6 +128,35 @@ export async function generateAdminPdf(requestBody: CoverLetterRequest, options:
   };
 }
 
+export async function generateAdminText(requestBody: CoverLetterRequest, options: GenerateAdminPdfOptions = {}) {
+  const response = await fetchWithRetry(buildApiUrl('/api/admin/generate-text'), {
+    body: JSON.stringify({
+      ...requestBody,
+      previewBodyTemplate: options.previewBodyTemplate,
+      previewBodyTemplateId: options.previewBodyTemplateId
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Coverfire-Method': options.method || 'admin-ui',
+      ...(typeof window !== 'undefined'
+        ? { 'X-Coverfire-Render-Origin': window.location.origin }
+        : {})
+    },
+    method: 'POST'
+  }, {
+    timeoutMs: pdfRequestTimeoutMs
+  });
+
+  if (!response.ok) {
+    throw await buildError(response);
+  }
+
+  return {
+    text: await response.text(),
+    filename: getFilenameFromDisposition(response.headers.get('Content-Disposition'))
+  };
+}
+
 export async function generatePdf(requestBody: CoverLetterRequest, apiKey: string) {
   const response = await fetchWithRetry(buildApiUrl('/api/pdf'), {
     body: JSON.stringify(requestBody),
@@ -146,6 +175,28 @@ export async function generatePdf(requestBody: CoverLetterRequest, apiKey: strin
 
   return {
     blob: await response.blob(),
+    filename: getFilenameFromDisposition(response.headers.get('Content-Disposition'))
+  };
+}
+
+export async function generateText(requestBody: CoverLetterRequest, apiKey: string) {
+  const response = await fetchWithRetry(buildApiUrl('/api/text'), {
+    body: JSON.stringify(requestBody),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Coverfire-Key': apiKey
+    },
+    method: 'POST'
+  }, {
+    timeoutMs: pdfRequestTimeoutMs
+  });
+
+  if (!response.ok) {
+    throw await buildError(response);
+  }
+
+  return {
+    text: await response.text(),
     filename: getFilenameFromDisposition(response.headers.get('Content-Disposition'))
   };
 }
