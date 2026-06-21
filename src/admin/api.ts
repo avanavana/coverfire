@@ -100,7 +100,7 @@ export async function setDefaultBodyTemplate(id: string) {
 }
 
 export async function generateAdminPdf(requestBody: CoverLetterRequest, options: GenerateAdminPdfOptions = {}) {
-  const response = await fetchWithRetry(buildApiUrl('/api/admin/generate'), {
+  const response = await fetchWithRetry(buildApiUrl('/api/admin/pdf'), {
     body: JSON.stringify({
       ...requestBody,
       previewBodyTemplate: options.previewBodyTemplate,
@@ -129,7 +129,7 @@ export async function generateAdminPdf(requestBody: CoverLetterRequest, options:
 }
 
 export async function generateAdminText(requestBody: CoverLetterRequest, options: GenerateAdminPdfOptions = {}) {
-  const response = await fetchWithRetry(buildApiUrl('/api/admin/generate-text'), {
+  const response = await fetchWithRetry(buildApiUrl('/api/admin/text'), {
     body: JSON.stringify({
       ...requestBody,
       previewBodyTemplate: options.previewBodyTemplate,

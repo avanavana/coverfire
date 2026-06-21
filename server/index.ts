@@ -35,6 +35,13 @@ import {
   serializeCoverLetterAdminDocument,
 } from '../src/cover-letter/index.ts';
 
+type CoverLetterGenerationRequest = ReturnType<typeof parseCoverLetterRequest>;
+
+interface CoverLetterGenerationContext {
+  adminDocument: CoverLetterAdminDocument;
+  coverLetterRequest: CoverLetterGenerationRequest;
+}
+
 const host = process.env.HOST || '0.0.0.0';
 const port = parsePort(process.env.PORT);
 const apiKey = process.env.COVERFIRE_API_KEY;
@@ -129,27 +136,19 @@ app.post('/api/admin/logs/:id/regenerate', async function regenerateAdminLogHand
       return;
     }
 
-    const pdf = await renderCoverLetterPdf(
-      generationLogEntry.request,
-      generationLogEntry.adminDocument,
-      getRequestedRenderOrigin(request)
+    await sendGeneratedPdf(
+      response,
+      {
+        adminDocument: generationLogEntry.adminDocument,
+        coverLetterRequest: generationLogEntry.request
+      },
+      {
+        method: {
+          kind: 'admin-ui'
+        },
+        renderOrigin: getRequestedRenderOrigin(request)
+      }
     );
-    const filename = buildPdfFilename(generationLogEntry.request);
-
-    await appendCoverLetterGenerationLogEntry(
-      buildCoverLetterGenerationLogEntry(
-        generationLogEntry.request,
-        generationLogEntry.adminDocument,
-        {
-          filename,
-          method: {
-            kind: 'admin-ui'
-          }
-        }
-      )
-    );
-
-    sendPdfResponse(response, pdf, filename);
   } catch (error) {
     next(error);
   }
@@ -313,66 +312,32 @@ app.post('/api/admin/templates/:id/default', async function defaultAdminTemplate
   }
 });
 
-app.post('/api/admin/generate', async function adminGeneratePdfHandler(request, response, next) {
+app.post([ '/api/admin/pdf', '/api/admin/generate' ], async function adminGeneratePdfHandler(request, response, next) {
   try {
-    const coverLetterRequest = parseCoverLetterRequest(request.body);
-    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+    const generationContext = await getPreviewCoverLetterGenerationContext(request, response);
 
-    if (validationMessage) {
-      response.status(400).json({
-        error: 'Invalid cover letter request',
-        message: validationMessage
-      });
+    if (!generationContext) {
       return;
     }
 
-    const adminDocument = applyPreviewBodyTemplate(
-      await getAdminDocument(),
-      request.body.previewBodyTemplateId,
-      request.body.previewBodyTemplate
-    );
-    const pdf = await renderCoverLetterPdf(
-      coverLetterRequest,
-      adminDocument,
-      getRequestedRenderOrigin(request)
-    );
-    const filename = buildPdfFilename(coverLetterRequest);
-
-    await appendCoverLetterGenerationLogEntry(
-      buildCoverLetterGenerationLogEntry(coverLetterRequest, adminDocument, {
-        filename,
-        method: getRequestedAdminGenerationMethod(request)
-      })
-    );
-
-    sendPdfResponse(response, pdf, filename);
+    await sendGeneratedPdf(response, generationContext, {
+      method: getRequestedAdminGenerationMethod(request),
+      renderOrigin: getRequestedRenderOrigin(request)
+    });
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/admin/generate-text', async function adminGenerateTextHandler(request, response, next) {
+app.post([ '/api/admin/text', '/api/admin/generate-text' ], async function adminGenerateTextHandler(request, response, next) {
   try {
-    const coverLetterRequest = parseCoverLetterRequest(request.body);
-    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+    const generationContext = await getPreviewCoverLetterGenerationContext(request, response);
 
-    if (validationMessage) {
-      response.status(400).json({
-        error: 'Invalid cover letter request',
-        message: validationMessage
-      });
+    if (!generationContext) {
       return;
     }
 
-    const adminDocument = applyPreviewBodyTemplate(
-      await getAdminDocument(),
-      request.body.previewBodyTemplateId,
-      request.body.previewBodyTemplate
-    );
-    const text = buildCoverLetterText(coverLetterRequest, adminDocument);
-    const filename = buildTextFilename(coverLetterRequest);
-
-    sendTextResponse(response, text, filename);
+    sendGeneratedText(response, generationContext);
   } catch (error) {
     next(error);
   }
@@ -380,12 +345,7 @@ app.post('/api/admin/generate-text', async function adminGenerateTextHandler(req
 
 app.get('/api/templates', async function coverLetterTemplatesHandler(request, response, next) {
   try {
-    ensureApiKeyConfiguration();
-
-    if (!isAuthorizedRequest(request.header('x-coverfire-key'))) {
-      response.status(401).json({
-        error: 'Unauthorized'
-      });
+    if (!authorizeApiRequest(request, response)) {
       return;
     }
 
@@ -399,38 +359,19 @@ app.get('/api/templates', async function coverLetterTemplatesHandler(request, re
 
 app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
-    ensureApiKeyConfiguration();
-
-    if (!isAuthorizedRequest(request.header('x-coverfire-key'))) {
-      response.status(401).json({
-        error: 'Unauthorized'
-      });
+    if (!authorizeApiRequest(request, response)) {
       return;
     }
 
-    const coverLetterRequest = parseCoverLetterRequest(request.body);
-    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+    const generationContext = await getSavedCoverLetterGenerationContext(request, response);
 
-    if (validationMessage) {
-      response.status(400).json({
-        error: 'Invalid cover letter request',
-        message: validationMessage
-      });
+    if (!generationContext) {
       return;
     }
 
-    const adminDocument = await getAdminDocument();
-    const pdf = await renderCoverLetterPdf(coverLetterRequest, adminDocument);
-    const filename = buildPdfFilename(coverLetterRequest);
-
-    await appendCoverLetterGenerationLogEntry(
-      buildCoverLetterGenerationLogEntry(coverLetterRequest, adminDocument, {
-        filename,
-        method: getRequestedApiGenerationMethod(request)
-      })
-    );
-
-    sendPdfResponse(response, pdf, filename);
+    await sendGeneratedPdf(response, generationContext, {
+      method: getRequestedApiGenerationMethod(request)
+    });
   } catch (error) {
     next(error);
   }
@@ -438,31 +379,17 @@ app.post('/api/pdf', async function coverLetterPdfHandler(request, response, nex
 
 app.post('/api/text', async function coverLetterTextHandler(request, response, next) {
   try {
-    ensureApiKeyConfiguration();
-
-    if (!isAuthorizedRequest(request.header('x-coverfire-key'))) {
-      response.status(401).json({
-        error: 'Unauthorized'
-      });
+    if (!authorizeApiRequest(request, response)) {
       return;
     }
 
-    const coverLetterRequest = parseCoverLetterRequest(request.body);
-    const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+    const generationContext = await getSavedCoverLetterGenerationContext(request, response);
 
-    if (validationMessage) {
-      response.status(400).json({
-        error: 'Invalid cover letter request',
-        message: validationMessage
-      });
+    if (!generationContext) {
       return;
     }
 
-    const adminDocument = await getAdminDocument();
-    const text = buildCoverLetterText(coverLetterRequest, adminDocument);
-    const filename = buildTextFilename(coverLetterRequest);
-
-    sendTextResponse(response, text, filename);
+    sendGeneratedText(response, generationContext);
   } catch (error) {
     next(error);
   }
@@ -550,8 +477,113 @@ app.listen(port, host, function listenHandler() {
   console.log(`Puppeteer cache exists: ${fs.existsSync(puppeteerCacheDirectory)}`);
 });
 
+function authorizeApiRequest(request: express.Request, response: express.Response) {
+  ensureApiKeyConfiguration();
+
+  if (isAuthorizedRequest(request.header('x-coverfire-key'))) {
+    return true;
+  }
+
+  response.status(401).json({
+    error: 'Unauthorized'
+  });
+  return false;
+}
+
+async function getSavedCoverLetterGenerationContext(
+  request: express.Request,
+  response: express.Response
+): Promise<CoverLetterGenerationContext | null> {
+  const coverLetterRequest = parseCoverLetterGenerationRequest(request.body, response);
+
+  if (!coverLetterRequest) {
+    return null;
+  }
+
+  return {
+    adminDocument: await getAdminDocument(),
+    coverLetterRequest
+  };
+}
+
+async function getPreviewCoverLetterGenerationContext(
+  request: express.Request,
+  response: express.Response
+): Promise<CoverLetterGenerationContext | null> {
+  const coverLetterRequest = parseCoverLetterGenerationRequest(request.body, response);
+
+  if (!coverLetterRequest) {
+    return null;
+  }
+
+  return {
+    adminDocument: applyPreviewBodyTemplate(
+      await getAdminDocument(),
+      request.body.previewBodyTemplateId,
+      request.body.previewBodyTemplate
+    ),
+    coverLetterRequest
+  };
+}
+
+function parseCoverLetterGenerationRequest(
+  input: unknown,
+  response: express.Response
+): CoverLetterGenerationRequest | null {
+  const coverLetterRequest = parseCoverLetterRequest(input);
+  const validationMessage = getCoverLetterGenerationValidationMessage(coverLetterRequest);
+
+  if (!validationMessage) {
+    return coverLetterRequest;
+  }
+
+  response.status(400).json({
+    error: 'Invalid cover letter request',
+    message: validationMessage
+  });
+  return null;
+}
+
+async function sendGeneratedPdf(
+  response: express.Response,
+  generationContext: CoverLetterGenerationContext,
+  options: {
+    method: CoverLetterGenerationMethod;
+    renderOrigin?: string | null;
+  }
+) {
+  const pdf = await renderCoverLetterPdf(
+    generationContext.coverLetterRequest,
+    generationContext.adminDocument,
+    options.renderOrigin
+  );
+  const filename = buildPdfFilename(generationContext.coverLetterRequest);
+
+  await appendCoverLetterGenerationLogEntry(
+    buildCoverLetterGenerationLogEntry(generationContext, {
+      filename,
+      method: options.method
+    })
+  );
+
+  sendPdfResponse(response, pdf, filename);
+}
+
+function sendGeneratedText(
+  response: express.Response,
+  generationContext: CoverLetterGenerationContext
+) {
+  const text = buildCoverLetterText(
+    generationContext.coverLetterRequest,
+    generationContext.adminDocument
+  );
+  const filename = buildTextFilename(generationContext.coverLetterRequest);
+
+  sendTextResponse(response, text, filename);
+}
+
 async function renderCoverLetterPdf(
-  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
+  coverLetterRequest: CoverLetterGenerationRequest,
   adminDocument: Awaited<ReturnType<typeof getAdminDocument>>,
   renderOriginOverride?: string | null
 ) {
@@ -645,7 +677,7 @@ async function waitForCoverLetterFonts(page: Page) {
 }
 
 function buildRenderUrl(
-  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
+  coverLetterRequest: CoverLetterGenerationRequest,
   adminDocument: Awaited<ReturnType<typeof getAdminDocument>>,
   renderOriginOverride?: string | null
 ) {
@@ -865,7 +897,7 @@ function parseBasicAuthorizationHeader(authorizationHeader: string | undefined) 
   }
 }
 
-function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+function buildPdfFilename(coverLetterRequest: CoverLetterGenerationRequest) {
   return [
     'avana_vana',
     slugifyFilenamePart(coverLetterRequest.role),
@@ -875,7 +907,7 @@ function buildPdfFilename(coverLetterRequest: ReturnType<typeof parseCoverLetter
   ].join('-') + '.pdf';
 }
 
-function buildTextFilename(coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>) {
+function buildTextFilename(coverLetterRequest: CoverLetterGenerationRequest) {
   return [
     'avana_vana',
     slugifyFilenamePart(coverLetterRequest.role),
@@ -886,13 +918,13 @@ function buildTextFilename(coverLetterRequest: ReturnType<typeof parseCoverLette
 }
 
 function buildCoverLetterGenerationLogEntry(
-  coverLetterRequest: ReturnType<typeof parseCoverLetterRequest>,
-  adminDocument: CoverLetterAdminDocument,
+  generationContext: CoverLetterGenerationContext,
   options: {
     filename: string;
     method: CoverLetterGenerationMethod;
   }
 ): CoverLetterGenerationLogEntry {
+  const { adminDocument, coverLetterRequest } = generationContext;
   const resolvedCoverLetter = buildCoverLetter(coverLetterRequest, adminDocument);
 
   return {
