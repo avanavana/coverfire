@@ -15,6 +15,7 @@ import { buttonVariants, Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Email, GitHub, Link, LinkedIn } from '@/components/icons';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import {
   buildCoverLetter,
@@ -818,14 +819,6 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(function revokeObjectUrl() {
     URL.revokeObjectURL(objectUrl);
   }, 1000);
-}
-
-async function copyTextToClipboard(text: string) {
-  if (!navigator.clipboard?.writeText) {
-    throw new Error('Clipboard access is unavailable in this browser.');
-  }
-
-  await navigator.clipboard.writeText(text);
 }
 
 function getErrorMessage(error: unknown) {

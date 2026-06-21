@@ -97,6 +97,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { getCoverLetterGenerationValidationMessage } from '@/cover-letter';
 
@@ -189,6 +190,81 @@ export default function AdminPage() {
   const latestAdminDocumentRef = useRef<CoverLetterAdminDocument | null>(null);
   const latestDrawerBodyTemplateRef = useRef<BodyTemplateDraft | null>(null);
   const latestPersistedDocumentJsonRef = useRef('');
+
+  useEffect(
+    function syncGenerateDialogViewport() {
+      if (!isGenerateDialogOpen) {
+        return;
+      }
+
+      const root = document.documentElement;
+      const content = document.querySelector<HTMLElement>(
+        '[data-generate-dialog-content="true"]',
+      );
+      const resizeObserver = content
+        ? new ResizeObserver(updateGenerateDialogViewport)
+        : null;
+      let animationFrameId = 0;
+
+      function updateGenerateDialogViewport() {
+        window.cancelAnimationFrame(animationFrameId);
+        animationFrameId = window.requestAnimationFrame(function updatePosition() {
+          const visualViewport = window.visualViewport;
+          const viewportTop = visualViewport?.offsetTop || 0;
+          const viewportHeight = visualViewport?.height || window.innerHeight;
+          const contentHeight = content?.offsetHeight || 0;
+          const topSpacing = viewportTop + Math.max(
+            16,
+            (viewportHeight - contentHeight) / 2,
+          );
+          const bottomSpacing = Math.max(
+            16,
+            window.innerHeight - viewportTop - viewportHeight + 16,
+          );
+
+          root.style.setProperty(
+            '--coverfire-generate-dialog-top-spacing',
+            `${topSpacing}px`,
+          );
+          root.style.setProperty(
+            '--coverfire-generate-dialog-bottom-spacing',
+            `${bottomSpacing}px`,
+          );
+        });
+      }
+
+      if (content) {
+        resizeObserver?.observe(content);
+      }
+      updateGenerateDialogViewport();
+      window.addEventListener('resize', updateGenerateDialogViewport);
+      window.visualViewport?.addEventListener(
+        'resize',
+        updateGenerateDialogViewport,
+      );
+      window.visualViewport?.addEventListener(
+        'scroll',
+        updateGenerateDialogViewport,
+      );
+
+      return function cleanupGenerateDialogViewport() {
+        window.cancelAnimationFrame(animationFrameId);
+        resizeObserver?.disconnect();
+        window.removeEventListener('resize', updateGenerateDialogViewport);
+        window.visualViewport?.removeEventListener(
+          'resize',
+          updateGenerateDialogViewport,
+        );
+        window.visualViewport?.removeEventListener(
+          'scroll',
+          updateGenerateDialogViewport,
+        );
+        root.style.removeProperty('--coverfire-generate-dialog-top-spacing');
+        root.style.removeProperty('--coverfire-generate-dialog-bottom-spacing');
+      };
+    },
+    [isGenerateDialogOpen],
+  );
 
   const canRefreshAdminDocumentInPlace = useCallback(
     function canRefreshAdminDocumentInPlace() {
@@ -686,7 +762,7 @@ export default function AdminPage() {
                 </Button>
               </CardAction>
             </CardHeader>
-            <CardContent className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+            <CardContent className="pb-(--card-spacing) xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
               <div className="grid gap-4 py-1 md:grid-cols-2">
                 {adminDocument.bodyTemplates.map(
                   function renderBodyTemplate(bodyTemplate) {
@@ -1301,7 +1377,15 @@ export default function AdminPage() {
         open={isGenerateDialogOpen}
         onOpenChange={setIsGenerateDialogOpen}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          className="!relative !top-auto !left-auto !mx-auto !translate-x-0 !translate-y-0 sm:max-w-lg"
+          data-generate-dialog-content="true"
+          style={{
+            marginBottom:
+              'var(--coverfire-generate-dialog-bottom-spacing, 1rem)',
+            marginTop: 'var(--coverfire-generate-dialog-top-spacing, 1rem)',
+          }}
+        >
           <DialogHeader>
             <DialogTitle asChild>
               <h1 className="text-2xl font-semibold tracking-tight">
@@ -2373,14 +2457,6 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(function revokeObjectUrl() {
     URL.revokeObjectURL(objectUrl);
   }, 1000);
-}
-
-async function copyTextToClipboard(text: string) {
-  if (!navigator.clipboard?.writeText) {
-    throw new Error('Clipboard access is unavailable in this browser.');
-  }
-
-  await navigator.clipboard.writeText(text);
 }
 
 function buildFallbackFilename(bodyTemplateSlug: string) {
