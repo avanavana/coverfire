@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-06-21
+
+### Added
+
+- Add plain-text cover-letter generation through `/api/text` and admin preview text-generation endpoints
+- Add generate-as-text actions that copy resolved cover-letter text to the clipboard from the admin modal and preview drawer
+- Add README logo artwork and refreshed web app icon assets
+
+### Changed
+
+- Update preview mode so blank role and company fields render as `{{role}}` and `{{company}}` until filled
+- Update generation validation to reject empty role and company values instead of placeholder values
+- Update the preview drawer and generate modal headings and action layout
+- Improve the admin preview dialog layout on narrow viewports
+
+### Fixed
+
+- Allow the Escape key to close preview mode from inside the preview iframe
+
 ## [1.2.1] - 2026-06-18
 
 ### Fixed
