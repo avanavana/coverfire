@@ -377,7 +377,7 @@ export default function CoverLetterPage() {
                 </Drawer.Description>
                 <div className="flex items-center justify-between border-b px-6 py-4">
                   <div className="flex flex-col gap-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="text-2xl leading-tight font-semibold tracking-tight">
                       Generate cover letter
                     </h1>
                     <p className="text-sm text-muted-foreground">
@@ -395,19 +395,6 @@ export default function CoverLetterPage() {
                       disabled
                       id="preview-body-template"
                       value={selectedBodyTemplate?.name || ''}
-                    />
-                  </LabeledField>
-                  <LabeledField htmlFor="preview-title" label="Title">
-                    <Input
-                      data-vaul-no-drag
-                      id="preview-title"
-                      value={previewGenerateForm.title}
-                      onChange={function handleTitleChange(event) {
-                        updatePreviewGenerateFormField(
-                          'title',
-                          event.target.value,
-                        );
-                      }}
                     />
                   </LabeledField>
                   <LabeledField
@@ -444,6 +431,19 @@ export default function CoverLetterPage() {
                       />
                     </LabeledField>
                   ) : null}
+                  <LabeledField htmlFor="preview-title" label="Title">
+                    <Input
+                      data-vaul-no-drag
+                      id="preview-title"
+                      value={previewGenerateForm.title}
+                      onChange={function handleTitleChange(event) {
+                        updatePreviewGenerateFormField(
+                          'title',
+                          event.target.value,
+                        );
+                      }}
+                    />
+                  </LabeledField>
                   <LabeledField htmlFor="preview-role" label="Role">
                     <Input
                       data-vaul-no-drag

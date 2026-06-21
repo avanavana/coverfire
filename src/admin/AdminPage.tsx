@@ -172,6 +172,8 @@ export default function AdminPage() {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [isGenerateDialogKeyboardVisible, setIsGenerateDialogKeyboardVisible] =
+    useState(false);
   const [isLoadingGenerationLogs, setIsLoadingGenerationLogs] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetryingAdminDocument, setIsRetryingAdminDocument] = useState(false);
@@ -212,15 +214,17 @@ export default function AdminPage() {
           const visualViewport = window.visualViewport;
           const viewportTop = visualViewport?.offsetTop || 0;
           const viewportHeight = visualViewport?.height || window.innerHeight;
+          const occludedBottom = Math.max(
+            0,
+            window.innerHeight - viewportTop - viewportHeight,
+          );
           const contentHeight = content?.offsetHeight || 0;
           const topSpacing = viewportTop + Math.max(
             16,
             (viewportHeight - contentHeight) / 2,
           );
-          const bottomSpacing = Math.max(
-            16,
-            window.innerHeight - viewportTop - viewportHeight + 16,
-          );
+          const bottomSpacing = Math.max(16, occludedBottom + 16);
+          const isKeyboardVisible = occludedBottom > 80;
 
           root.style.setProperty(
             '--coverfire-generate-dialog-top-spacing',
@@ -230,6 +234,7 @@ export default function AdminPage() {
             '--coverfire-generate-dialog-bottom-spacing',
             `${bottomSpacing}px`,
           );
+          setIsGenerateDialogKeyboardVisible(isKeyboardVisible);
         });
       }
 
@@ -261,6 +266,7 @@ export default function AdminPage() {
         );
         root.style.removeProperty('--coverfire-generate-dialog-top-spacing');
         root.style.removeProperty('--coverfire-generate-dialog-bottom-spacing');
+        setIsGenerateDialogKeyboardVisible(false);
       };
     },
     [isGenerateDialogOpen],
@@ -922,7 +928,7 @@ export default function AdminPage() {
                               type="button"
                               className={cn(
                                 badgeVariants({ variant: 'outline' }),
-                                'cursor-pointer',
+                                'cursor-pointer font-medium',
                               )}
                               onClick={function handleSetDefaultBadgeClick(
                                 event,
@@ -1252,7 +1258,7 @@ export default function AdminPage() {
                                 badgeVariants({
                                   variant: isUsed ? 'default' : 'outline',
                                 }),
-                                'cursor-pointer font-mono',
+                                'cursor-pointer font-mono font-medium',
                               )}
                               onClick={function handleInsertTokenClick() {
                                 insertDrawerToken(token);
@@ -1378,17 +1384,29 @@ export default function AdminPage() {
         onOpenChange={setIsGenerateDialogOpen}
       >
         <DialogContent
-          className="!relative !top-auto !left-auto !mx-auto !translate-x-0 !translate-y-0 sm:max-w-lg"
+          className={cn(
+            'p-6 sm:max-w-lg',
+            isGenerateDialogKeyboardVisible &&
+              'relative! top-auto! left-auto! mx-auto! translate-x-0! translate-y-0!',
+          )}
           data-generate-dialog-content="true"
-          style={{
-            marginBottom:
-              'var(--coverfire-generate-dialog-bottom-spacing, 1rem)',
-            marginTop: 'var(--coverfire-generate-dialog-top-spacing, 1rem)',
-          }}
+          style={
+            isGenerateDialogKeyboardVisible
+              ? {
+                  marginBottom:
+                    'var(--coverfire-generate-dialog-bottom-spacing, 1rem)',
+                  marginTop:
+                    'var(--coverfire-generate-dialog-top-spacing, 1rem)',
+                }
+              : undefined
+          }
         >
           <DialogHeader>
-            <DialogTitle asChild>
-              <h1 className="text-2xl font-semibold tracking-tight">
+            <DialogTitle
+              asChild
+              className="text-2xl leading-tight font-semibold tracking-tight"
+            >
+              <h1>
                 Generate cover letter
               </h1>
             </DialogTitle>
@@ -1404,27 +1422,9 @@ export default function AdminPage() {
                 value={selectedBodyTemplate?.name || ''}
               />
             </LabeledField>
-            <LabeledField htmlFor="generate-role" label="Role">
-              <Input
-                id="generate-role"
-                value={generateForm.role}
-                onChange={function handleRoleChange(event) {
-                  updateGenerateField('role', event.target.value);
-                }}
-              />
-            </LabeledField>
-            <LabeledField htmlFor="generate-company" label="Company">
-              <Input
-                id="generate-company"
-                value={generateForm.company}
-                onChange={function handleCompanyChange(event) {
-                  updateGenerateField('company', event.target.value);
-                }}
-              />
-            </LabeledField>
             <LabeledField
               htmlFor="generate-hiring-manager"
-              label="Hiring manager"
+              label="Hiring Manager"
             >
               <Input
                 id="generate-hiring-manager"
@@ -1457,8 +1457,26 @@ export default function AdminPage() {
                 }}
               />
             </LabeledField>
+            <LabeledField htmlFor="generate-role" label="Role">
+              <Input
+                id="generate-role"
+                value={generateForm.role}
+                onChange={function handleRoleChange(event) {
+                  updateGenerateField('role', event.target.value);
+                }}
+              />
+            </LabeledField>
+            <LabeledField htmlFor="generate-company" label="Company">
+              <Input
+                id="generate-company"
+                value={generateForm.company}
+                onChange={function handleCompanyChange(event) {
+                  updateGenerateField('company', event.target.value);
+                }}
+              />
+            </LabeledField>
           </div>
-          <DialogFooter>
+          <DialogFooter className="-mx-6 -mb-6 px-6 py-2">
             <Button
               variant="outline"
               onClick={function handleCloseGenerateDialog() {
