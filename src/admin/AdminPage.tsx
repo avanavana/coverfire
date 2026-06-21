@@ -1454,7 +1454,9 @@ export default function AdminPage() {
             </LabeledField>
             <LabeledField htmlFor="generate-role" label="Role">
               <Input
+                autoComplete="off"
                 id="generate-role"
+                name="coverfire-generate-role"
                 value={generateForm.role}
                 onChange={function handleRoleChange(event) {
                   updateGenerateField('role', event.target.value);
@@ -1463,7 +1465,9 @@ export default function AdminPage() {
             </LabeledField>
             <LabeledField htmlFor="generate-company" label="Company">
               <Input
+                autoComplete="off"
                 id="generate-company"
+                name="coverfire-generate-company"
                 value={generateForm.company}
                 onChange={function handleCompanyChange(event) {
                   updateGenerateField('company', event.target.value);

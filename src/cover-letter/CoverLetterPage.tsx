@@ -440,8 +440,10 @@ export default function CoverLetterPage() {
                   </LabeledField>
                   <LabeledField htmlFor="preview-role" label="Role">
                     <Input
+                      autoComplete="off"
                       data-vaul-no-drag
                       id="preview-role"
+                      name="coverfire-preview-role"
                       value={previewGenerateForm.role}
                       onChange={function handleRoleChange(event) {
                         updatePreviewGenerateFormField(
@@ -453,8 +455,10 @@ export default function CoverLetterPage() {
                   </LabeledField>
                   <LabeledField htmlFor="preview-company" label="Company">
                     <Input
+                      autoComplete="off"
                       data-vaul-no-drag
                       id="preview-company"
+                      name="coverfire-preview-company"
                       value={previewGenerateForm.company}
                       onChange={function handleCompanyChange(event) {
                         updatePreviewGenerateFormField(
