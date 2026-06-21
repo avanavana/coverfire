@@ -369,20 +369,14 @@ export default function CoverLetterPage() {
               <Drawer.Content
                 className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-background shadow-lg outline-none"
               >
-                <Drawer.Title className="sr-only">
-                  Generate cover letter preview
-                </Drawer.Title>
-                <Drawer.Description className="sr-only">
-                  Configure the live cover letter preview and generate a PDF or plain text.
-                </Drawer.Description>
                 <div className="flex items-center justify-between border-b px-6 py-4">
                   <div className="flex flex-col gap-1">
-                    <h1 className="text-2xl leading-tight font-semibold tracking-tight">
+                    <Drawer.Title className="text-2xl leading-tight font-semibold tracking-tight">
                       Generate cover letter
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
+                    </Drawer.Title>
+                    <Drawer.Description className="text-sm text-muted-foreground">
                       Update the live preview, then generate a PDF or copy plain text.
-                    </p>
+                    </Drawer.Description>
                   </div>
                 </div>
                 <div
