@@ -378,6 +378,25 @@ app.post('/api/admin/generate-text', async function adminGenerateTextHandler(req
   }
 });
 
+app.get('/api/templates', async function coverLetterTemplatesHandler(request, response, next) {
+  try {
+    ensureApiKeyConfiguration();
+
+    if (!isAuthorizedRequest(request.header('x-coverfire-key'))) {
+      response.status(401).json({
+        error: 'Unauthorized'
+      });
+      return;
+    }
+
+    const adminDocument = await getAdminDocument();
+
+    response.json(adminDocument.bodyTemplates.map(getBodyTemplateSummary));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/pdf', async function coverLetterPdfHandler(request, response, next) {
   try {
     ensureApiKeyConfiguration();
@@ -996,6 +1015,14 @@ function sendTextResponse(
   response.setHeader('Content-Type', 'text/plain; charset=utf-8');
   response.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   response.send(text);
+}
+
+function getBodyTemplateSummary(bodyTemplate: CoverLetterBodyTemplate) {
+  return {
+    id: bodyTemplate.id,
+    slug: bodyTemplate.slug,
+    name: bodyTemplate.name
+  };
 }
 
 function getBodyTemplateById(adminDocument: CoverLetterAdminDocument, bodyTemplateId: string) {
