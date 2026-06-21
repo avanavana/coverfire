@@ -393,13 +393,26 @@ export const coverLetterDataModel: CoverLetterDataModel = {
 };
 
 export const coverLetterPreviewRequest = coverLetterDataModel.previewRequest;
+const optionalTemplateIdSchema = z.preprocess(
+  function normalizeOptionalTemplateId(value) {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const normalizedValue = value.trim();
+
+    return normalizedValue || undefined;
+  },
+  z.string().min(1).optional()
+);
+
 export const coverLetterRequestSchema = z.object({
   hiringManager: z.string().trim().min(1).optional(),
   salutation: z.string().trim().min(1).optional(),
   title: z.string().trim().min(1).optional(),
   role: z.string().trim().min(1),
   company: z.string().trim().min(1),
-  templateId: z.string().trim().min(1).optional()
+  templateId: optionalTemplateIdSchema
 });
 
 export function getCoverLetterPreviewRequest(overrides: Partial<CoverLetterRequest> = {}): CoverLetterRequest {
