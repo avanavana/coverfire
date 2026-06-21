@@ -1,4 +1,12 @@
-# Coverfire
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/coverfire-logo-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset=".github/coverfire-logo-light.gif">
+    <img src=".github/coverfire-logo-light.gif" alt="Coverfire" width="460">
+  </picture>
+</p>
+
+---
 
 Coverfire recreates a standard cover letter in HTML/CSS and generates a print-ready PDF from that same rendered page.
 
